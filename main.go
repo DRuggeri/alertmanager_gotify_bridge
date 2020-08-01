@@ -160,7 +160,7 @@ func (svr *bridge) handle_call(w http.ResponseWriter, r *http.Request) {
 				tmp, err := strconv.Atoi(val)
 				if err != nil {
 					priority = tmp
-					if *svr.debug { log.Printf("  priority: %s\n", priority) }
+					if *svr.debug { log.Printf("  priority: %d\n", priority) }
 				}
 			} else {
 				if *svr.debug { log.Printf("  priority annotation (%s) missing - falling back to default (%d)\n", *svr.priority_annotation, *svr.default_priority); }
