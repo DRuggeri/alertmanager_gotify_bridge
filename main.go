@@ -41,7 +41,6 @@ type GotifyNotification struct {
 }
 
 var (
-	gotify_token    = kingpin.Flag("gotify_token", "Application token provisioned in gotify").Required().Envar("GOTIFY_TOKEN").String()
 	gotify_endpoint = kingpin.Flag("gotify_endpoint", "Full path to the Gotify messages endpoint").Default("http://127.0.0.1:80/message").Envar("GOTIFY_ENDPOINT").String()
 
 	address      = kingpin.Flag("bind_address", "The address the bridge will listen on").Default("0.0.0.0").Envar("BIND_ADDRESS").IP()
@@ -61,6 +60,12 @@ func main() {
 	kingpin.Version("0.0.1")
 	kingpin.Parse()
 
+	gotify_token := os.Getenv("GOTIFY_TOKEN")
+	if gotify_token == "" {
+		os.Stderr.WriteString("ERROR: The token for Gotify API must be set in the environment variable GOTIFY_TOKEN\n")
+		os.Exit(1)
+	}
+
 	_, err := url.ParseRequestURI(*gotify_endpoint)
 	if err != nil {
 		fmt.Printf("Error - invalid gotify endpoint: %s\n", err)
@@ -75,7 +80,7 @@ func main() {
 		message_annotation:  message_annotation,
 		priority_annotation: priority_annotation,
 		default_priority:    default_priority,
-		gotify_token:        gotify_token,
+		gotify_token:        &gotify_token,
 		gotify_endpoint:     gotify_endpoint,
 	}
 
