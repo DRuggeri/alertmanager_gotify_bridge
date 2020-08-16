@@ -26,10 +26,12 @@ $ alertmanager_gotify_bridge <flags>
 ## Usage
 NOTE: All parameters may be set as environment entries as well as provided on the command line. The environment entry is the same as the flag but converted to all capital letters.
 
+For example, the environment entry for `gotify_token` may be set as `GOTIFY_TOKEN`
+
 ### Flags
 
 ```
-usage: alertmanager_gotify_bridge --gotify_token=GOTIFY_TOKEN [<flags>]
+usage: alertmanager_gotify_bridge [<flags>]
 
 Flags:
   --help                       Show context-sensitive help (also try --help-long and --help-man).

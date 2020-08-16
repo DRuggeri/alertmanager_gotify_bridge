@@ -41,7 +41,7 @@ type GotifyNotification struct {
 }
 
 var (
-	gotify_endpoint = kingpin.Flag("gotify_endpoint", "Full path to the Gotify messages endpoint").Default("http://127.0.0.1:80/message").Envar("GOTIFY_ENDPOINT").String()
+	gotify_endpoint = kingpin.Flag("gotify_endpoint", "Full path to the Gotify message endpoint").Default("http://127.0.0.1:80/message").Envar("GOTIFY_ENDPOINT").String()
 
 	address      = kingpin.Flag("bind_address", "The address the bridge will listen on").Default("0.0.0.0").Envar("BIND_ADDRESS").IP()
 	port         = kingpin.Flag("port", "The port the bridge will listen on").Default("8080").Envar("PORT").Int()
@@ -66,13 +66,28 @@ func main() {
 		os.Exit(1)
 	}
 
+	if !strings.HasSuffix(*gotify_endpoint, "/message") {
+		os.Stderr.WriteString(fmt.Sprintf("WARNING: /message not at the end of the gotify_endpoint parameter (%s). Automatically appending it.\n", *gotify_endpoint))
+		to_add := "/message"
+		if strings.HasSuffix(*gotify_endpoint, "/") {
+			to_add = "message"
+		}
+		*gotify_endpoint += to_add
+		os.Stderr.WriteString(fmt.Sprintf("New gotify_endpoint: %s\n", *gotify_endpoint))
+	}
+
 	_, err := url.ParseRequestURI(*gotify_endpoint)
 	if err != nil {
 		fmt.Printf("Error - invalid gotify endpoint: %s\n", err)
 		os.Exit(1)
 	}
 
-	fmt.Printf("Starting server on http://%s:%d%s...\n", *address, *port, *webhook_path)
+	server_type := ""
+	if *debug {
+		server_type = "debug "
+	}
+
+	fmt.Printf("Starting %sserver on http://%s:%d%s translating to %s ...\n", server_type, *address, *port, *webhook_path, *gotify_endpoint)
 	svr := &bridge{
 		debug:               debug,
 		timeout:             timeout,
@@ -222,6 +237,10 @@ func (svr *bridge) handle_call(w http.ResponseWriter, r *http.Request) {
 					body, _ := ioutil.ReadAll(resp.Body)
 					if *svr.debug {
 						log.Printf("  Dispatched! Response was %s\n", body)
+					}
+					if resp.StatusCode != 200 {
+						log.Printf("Non-200 response from gotify at %s. Code: %d, Status: %s (enable debug to see body)",
+							*svr.gotify_endpoint, resp.StatusCode, resp.Status)
 					}
 					http.Error(w, resp.Status, resp.StatusCode)
 					return
