@@ -35,7 +35,6 @@ usage: alertmanager_gotify_bridge [<flags>]
 
 Flags:
   --help                       Show context-sensitive help (also try --help-long and --help-man).
-  --gotify_token=GOTIFY_TOKEN  Application token provisioned in gotify
   --gotify_endpoint="http://127.0.0.1:80/message"
                                Full path to the Gotify messages endpoint
   --bind_address=0.0.0.0       The address the bridge will listen on
