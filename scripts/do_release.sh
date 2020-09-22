@@ -15,8 +15,12 @@ for line in $CONFIG; do
   eval "$line"
 done
 
-if [[ -z "$github_api_token" && -f github_api_token ]];then
-  github_api_token=$(cat github_api_token)
+if [[ -z "$github_api_token" ]];then
+  if [[ -f ~/github_api_token ]];then
+    github_api_token=$(cat ~/github_api_token)
+  elif [[ -f github_api_token ]];then
+    github_api_token=$(cat github_api_token)
+  fi
 fi
 
 if [[ -z "$owner" ]];then
