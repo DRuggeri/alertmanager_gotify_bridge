@@ -52,3 +52,4 @@ Flags:
   --debug                      Enable debug output of the server
   --version                    Show application version.
 ```
+Dockerized version https://hub.docker.com/r/nathaneaston/alertmanager_gotify_bridge-docker
