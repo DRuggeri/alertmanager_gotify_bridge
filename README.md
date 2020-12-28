@@ -52,4 +52,5 @@ Flags:
   --debug                      Enable debug output of the server
   --version                    Show application version.
 ```
-Dockerized version https://hub.docker.com/r/nathaneaston/alertmanager_gotify_bridge-docker
+## Community Contributions
+* A docker container of this bridge is maintained by [ndragon798](https://github.com/ndragon798) on [docker hub](https://hub.docker.com/r/nathaneaston/alertmanager_gotify_bridge-docker)
