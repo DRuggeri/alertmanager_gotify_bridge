@@ -155,35 +155,38 @@ func (svr *bridge) handle_call(w http.ResponseWriter, r *http.Request) {
 			log.Printf("Detected %d alerts\n", len(notification.Alerts))
 		}
 
-		for _, alert := range notification.Alerts {
+		for idx, alert := range notification.Alerts {
 			proceed := true
 			title := ""
 			message := ""
 			priority := *svr.default_priority
+			if *svr.debug {
+				log.Printf("  Alert %d", idx)
+			}
 
 			if val, ok := alert.Annotations[*svr.title_annotation]; ok {
 				title = val
 				if *svr.debug {
-					log.Printf("  title: %s\n", title)
+					log.Printf("    title: %s\n", title)
 				}
 			} else {
 				proceed = false
 				text = []string{fmt.Sprintf("Missing annotation: %s", *svr.title_annotation)}
 				if *svr.debug {
-					log.Printf("  title annotation (%s) missing\n", *svr.title_annotation)
+					log.Printf("    title annotation (%s) missing\n", *svr.title_annotation)
 				}
 			}
 
 			if val, ok := alert.Annotations[*svr.message_annotation]; ok {
 				message = val
 				if *svr.debug {
-					log.Printf("  message: %s\n", message)
+					log.Printf("    message: %s\n", message)
 				}
 			} else {
 				proceed = false
 				text = []string{fmt.Sprintf("Missing annotation: %s", *svr.message_annotation)}
 				if *svr.debug {
-					log.Printf("  message annotation (%s) missing\n", *svr.message_annotation)
+					log.Printf("    message annotation (%s) missing\n", *svr.message_annotation)
 				}
 			}
 
@@ -192,18 +195,18 @@ func (svr *bridge) handle_call(w http.ResponseWriter, r *http.Request) {
 				if err != nil {
 					priority = tmp
 					if *svr.debug {
-						log.Printf("  priority: %d\n", priority)
+						log.Printf("    priority: %d\n", priority)
 					}
 				}
 			} else {
 				if *svr.debug {
-					log.Printf("  priority annotation (%s) missing - falling back to default (%d)\n", *svr.priority_annotation, *svr.default_priority)
+					log.Printf("    priority annotation (%s) missing - falling back to default (%d)\n", *svr.priority_annotation, *svr.default_priority)
 				}
 			}
 
 			if proceed {
 				if *svr.debug {
-					log.Printf("  Required fields found. Dispatching to gotify...\n")
+					log.Printf("    Required fields found. Dispatching to gotify...\n")
 				}
 				outbound := GotifyNotification{
 					Title:    title,
@@ -212,7 +215,7 @@ func (svr *bridge) handle_call(w http.ResponseWriter, r *http.Request) {
 				}
 				msg, _ := json.Marshal(outbound)
 				if *svr.debug {
-					log.Printf("  Outbound: %s\n", string(msg))
+					log.Printf("    Outbound: %s\n", string(msg))
 				}
 
 				client := http.Client{
@@ -238,19 +241,21 @@ func (svr *bridge) handle_call(w http.ResponseWriter, r *http.Request) {
 					defer resp.Body.Close()
 					body, _ := ioutil.ReadAll(resp.Body)
 					if *svr.debug {
-						log.Printf("  Dispatched! Response was %s\n", body)
+						log.Printf("    Dispatched! Response was %s\n", body)
 					}
 					if resp.StatusCode != 200 {
 						log.Printf("Non-200 response from gotify at %s. Code: %d, Status: %s (enable debug to see body)",
 							*svr.gotify_endpoint, resp.StatusCode, resp.Status)
+						respCode = resp.StatusCode
+						text = append(text, fmt.Sprintf("Gotify Error: %s", resp.Status))
+					} else {
+						text = append(text, fmt.Sprintf("Message %d dispatched", idx))
 					}
-					respCode = resp.StatusCode
-					text = append(text, fmt.Sprintf("GotifyErr: %i", resp.Status))
 					continue
 				}
 			} else {
 				if *svr.debug {
-					log.Printf("  Unable to dispatch!\n")
+					log.Printf("    Unable to dispatch!\n")
 					respCode = http.StatusBadRequest
 					text = []string{"Incomplete request"}
 				}
