@@ -117,7 +117,8 @@ func main() {
 
 func (svr *bridge) handle_call(w http.ResponseWriter, r *http.Request) {
 	var notification Notification
-	text := ""
+	text := []string{}
+	respCode := http.StatusOK
 
 	/* Assume this will never fail */
 	b, _ := ioutil.ReadAll(r.Body)
@@ -167,7 +168,7 @@ func (svr *bridge) handle_call(w http.ResponseWriter, r *http.Request) {
 				}
 			} else {
 				proceed = false
-				text = fmt.Sprintf("Missing annotation: %s", *svr.title_annotation)
+				text = []string{fmt.Sprintf("Missing annotation: %s", *svr.title_annotation)}
 				if *svr.debug {
 					log.Printf("  title annotation (%s) missing\n", *svr.title_annotation)
 				}
@@ -180,7 +181,7 @@ func (svr *bridge) handle_call(w http.ResponseWriter, r *http.Request) {
 				}
 			} else {
 				proceed = false
-				text = fmt.Sprintf("Missing annotation: %s", *svr.message_annotation)
+				text = []string{fmt.Sprintf("Missing annotation: %s", *svr.message_annotation)}
 				if *svr.debug {
 					log.Printf("  message annotation (%s) missing\n", *svr.message_annotation)
 				}
@@ -230,8 +231,9 @@ func (svr *bridge) handle_call(w http.ResponseWriter, r *http.Request) {
 				resp, err := client.Do(request)
 				if err != nil {
 					log.Printf("Error dispatching to Gotify: %s", err)
-					http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-					return
+					respCode = http.StatusInternalServerError
+					text = append(text, err.Error())
+					continue
 				} else {
 					defer resp.Body.Close()
 					body, _ := ioutil.ReadAll(resp.Body)
@@ -242,15 +244,22 @@ func (svr *bridge) handle_call(w http.ResponseWriter, r *http.Request) {
 						log.Printf("Non-200 response from gotify at %s. Code: %d, Status: %s (enable debug to see body)",
 							*svr.gotify_endpoint, resp.StatusCode, resp.Status)
 					}
-					http.Error(w, resp.Status, resp.StatusCode)
-					return
+					respCode = resp.StatusCode
+					text = append(text, fmt.Sprintf("GotifyErr: %i", resp.Status))
+					continue
+				}
+			} else {
+				if *svr.debug {
+					log.Printf("  Unable to dispatch!\n")
+					respCode = http.StatusBadRequest
+					text = []string{"Incomplete request"}
 				}
 			}
 		}
 	} else {
-		text = "No content sent"
+		text = []string{"No content sent"}
 	}
 
-	http.Error(w, text, http.StatusBadRequest)
+	http.Error(w, strings.Join(text, "\n"), respCode)
 	return
 }
