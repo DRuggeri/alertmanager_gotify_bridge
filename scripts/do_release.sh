@@ -1,7 +1,7 @@
 #!/bin/bash -e
 
 OSs=("darwin" "linux" "windows")
-ARCHs=("386" "amd64" "arm")
+ARCHs=("386" "amd64" "arm" "arm64")
 
 #Get into the right directory
 cd $(dirname $0)
@@ -50,7 +50,7 @@ echo "Building..."
 for GOOS in "${OSs[@]}";do
   for GOARCH in "${ARCHs[@]}";do
     #An exception case... targeting Raspberry Pi Linux, mostly...
-    if [[ "$GOARCH" == "arm" && "$GOOS" != "linux" ]];then continue; fi
+    if [[ "$GOARCH" == "arm"* && "$GOOS" != "linux" ]];then continue; fi
 
     export GOOS GOARCH
 
