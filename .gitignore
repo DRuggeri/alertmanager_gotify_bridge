@@ -1,3 +1,4 @@
 alertmanager_gotify_bridge
 scripts/github_api_token
 tmp/
+scripts/alertmanager*
