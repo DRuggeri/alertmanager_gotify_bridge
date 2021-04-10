@@ -34,23 +34,43 @@ For example, the environment entry for `gotify_token` may be set as `GOTIFY_TOKE
 usage: alertmanager_gotify_bridge [<flags>]
 
 Flags:
-  --help                       Show context-sensitive help (also try --help-long and --help-man).
+  --help                     Show context-sensitive help (also try --help-long and --help-man).
   --gotify_endpoint="http://127.0.0.1:80/message"
-                               Full path to the Gotify messages endpoint
-  --bind_address=0.0.0.0       The address the bridge will listen on
-  --port=8080                  The port the bridge will listen on
+                             Full path to the Gotify message endpoint
+  --bind_address=0.0.0.0     The address the bridge will listen on
+  --port=8080                The port the bridge will listen on
   --webhook_path="/gotify_webhook"
-                               The URL path to handle requests on
-  --timeout=5s                 The number of seconds to wait when connecting to gotify
+                             The URL path to handle requests on
+  --timeout=5s               The number of seconds to wait when connecting to gotify
   --title_annotation="description"
-                               Annotation holding the title of the alert
+                             Annotation holding the title of the alert
   --message_annotation="summary"
-                               Annotation holding the alert message
+                             Annotation holding the alert message
   --priority_annotation="priority"
-                               Annotation holding the priority of the alert
-  --default_priority=5         Annotation holding the priority of the alert
-  --debug                      Enable debug output of the server
-  --version                    Show application version.
+                             Annotation holding the priority of the alert
+  --default_priority=5       Annotation holding the priority of the alert
+  --metrics_auth_username=METRICS_AUTH_USERNAME
+                             Username for metrics interface basic auth ($AUTH_USERNAME and $AUTH_PASSWORD)
+  --metrics_namespace="alertmanager_gotify_bridge"
+                             Metrics Namespace ($METRICS_NAMESPACE)
+  --metrics_path="/metrics"  Path under which to expose metrics for the bridge ($METRICS_PATH)
+  --debug                    Enable debug output of the server
+  --version                  Show application version.
 ```
+
+## Metrics
+The bridge tracks telemetry data for metrics within the server as well as exposes gotify's health (obtained via the /health endpoint) as prometheus metrics. Therefore, the bridge can be scraped with Prometheus on /metrics to obtain these metrics.
+
+Exported metrics:
+- alertmanager_gotify_bridge_requests_received: Number of HTTP requests received regardless of being wel-formed
+- alertmanager_gotify_bridge_requests_invalid: Number of HTTP requests received that were apparently invalid HTTP requests
+- alertmanager_gotify_bridge_alerts_received: Overall number of alerts that were received, regardless of being well-formed
+- alertmanager_gotify_bridge_alerts_invalid: Number of alerts that were missing required fields and could not be dispatched to gotify
+- alertmanager_gotify_bridge_alerts_processed: Number of alerts that were succesfully translated and dispatched to gotify
+- alertmanager_gotify_bridge_alerts_failed: Number of alerts that could not be sent to gotify after decoding
+- alertmanager_gotify_bridge_gotify_up: Simple up/down for whether the /health endpoint could be probed by the bridge
+- alertmanager_gotify_bridge_gotify_health_health: Whether the /health endpoint returns "green" for "health"
+- alertmanager_gotify_bridge_gotify_health_database: Whether the /health endpoint returns "green" for "database"
+
 ## Community Contributions
 * A docker container of this bridge is maintained by [ndragon798](https://github.com/ndragon798) on [docker hub](https://hub.docker.com/r/nathaneaston/alertmanager_gotify_bridge-docker)
