@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"gopkg.in/alecthomas/kingpin.v2"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -13,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"gopkg.in/alecthomas/kingpin.v2"
 )
 
 type bridge struct {
@@ -31,13 +32,17 @@ type Notification struct {
 	Alerts []Alert
 }
 type Alert struct {
-	Annotations map[string]string
+	Annotations  map[string]string
+	Status       string
+	GeneratorURL string
+	StartsAt     string
 }
 
 type GotifyNotification struct {
-	Title    string `json:"title"`
-	Message  string `json:"message"`
-	Priority int    `json:"priority"`
+	Title    string                 `json:"title"`
+	Message  string                 `json:"message"`
+	Priority int                    `json:"priority"`
+	Extras   map[string]interface{} `json:"extras"`
 }
 
 var (
@@ -54,6 +59,8 @@ var (
 	default_priority    = kingpin.Flag("default_priority", "Annotation holding the priority of the alert").Default("5").Envar("DEFAULT_PRIORITY").Int()
 
 	debug = kingpin.Flag("debug", "Enable debug output of the server").Bool()
+
+	details = kingpin.Flag("details", "Amount of details in messages. 0 = default, 1 = extended").Default("0").Envar("DETAILS").Int()
 )
 
 func main() {
@@ -156,6 +163,7 @@ func (svr *bridge) handle_call(w http.ResponseWriter, r *http.Request) {
 		}
 
 		for idx, alert := range notification.Alerts {
+			extras := make(map[string]interface{})
 			proceed := true
 			title := ""
 			message := ""
@@ -164,8 +172,24 @@ func (svr *bridge) handle_call(w http.ResponseWriter, r *http.Request) {
 				log.Printf("  Alert %d", idx)
 			}
 
+			if *details == 1 {
+				// set text to html
+				contentType := make(map[string]string)
+				contentType["contentType"] = "text/html"
+				extras["client::display"] = contentType
+
+				switch alert.Status {
+				case "resolved":
+					message += "<font style='color: #00b339;' data-mx-color='#00b339'>RESOLVED</font><br/> "
+					title += "[RES] "
+				case "firing":
+					message += "<font style='color: #b31e00;' data-mx-color='#b31e00'>FIRING</font><br/> "
+					title += "[FIR] "
+				}
+			}
+
 			if val, ok := alert.Annotations[*svr.title_annotation]; ok {
-				title = val
+				title += val
 				if *svr.debug {
 					log.Printf("    title: %s\n", title)
 				}
@@ -178,7 +202,7 @@ func (svr *bridge) handle_call(w http.ResponseWriter, r *http.Request) {
 			}
 
 			if val, ok := alert.Annotations[*svr.message_annotation]; ok {
-				message = val
+				message += val
 				if *svr.debug {
 					log.Printf("    message: %s\n", message)
 				}
@@ -204,6 +228,15 @@ func (svr *bridge) handle_call(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 
+			if *details == 1 {
+				if strings.HasPrefix(alert.GeneratorURL, "http") {
+					message += "<br/><a href='" + alert.GeneratorURL + "'>go to source</a>"
+				}
+				if alert.StartsAt != "" {
+					message += "<br/><br/><i><font style='color: #999999;' data-mx-color='#999999'> alert created at: " + alert.StartsAt[:19] + "</font></i><br/>"
+				}
+			}
+
 			if proceed {
 				if *svr.debug {
 					log.Printf("    Required fields found. Dispatching to gotify...\n")
@@ -212,6 +245,7 @@ func (svr *bridge) handle_call(w http.ResponseWriter, r *http.Request) {
 					Title:    title,
 					Message:  message,
 					Priority: priority,
+					Extras:   extras,
 				}
 				msg, _ := json.Marshal(outbound)
 				if *svr.debug {
