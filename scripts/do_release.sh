@@ -51,6 +51,7 @@ for GOOS in "${OSs[@]}";do
   for GOARCH in "${ARCHs[@]}";do
     #An exception case... targeting Raspberry Pi Linux, mostly...
     if [[ "$GOARCH" == "arm"* && "$GOOS" != "linux" ]];then continue; fi
+    if [[ "$GOARCH" == "386" && "$GOOS" == "darwin" ]];then continue; fi
 
     export GOOS GOARCH
 
