@@ -34,35 +34,39 @@ type Notification struct {
 	Alerts []Alert
 }
 type Alert struct {
-	Annotations map[string]string
+	Annotations  map[string]string
+	Status       string
+	GeneratorURL string
+	StartsAt     string
 }
 
 type GotifyNotification struct {
-	Title    string `json:"title"`
-	Message  string `json:"message"`
-	Priority int    `json:"priority"`
+	Title    string                 `json:"title"`
+	Message  string                 `json:"message"`
+	Priority int                    `json:"priority"`
+	Extras   map[string]interface{} `json:"extras"`
 }
 
 var (
-	gotifyEndpoint = kingpin.Flag("gotifyEndpoint", "Full path to the Gotify message endpoint").Default("http://127.0.0.1:80/message").Envar("GOTIFY_ENDPOINT").String()
+	gotifyEndpoint = kingpin.Flag("gotify_endpoint", "Full path to the Gotify message endpoint").Default("http://127.0.0.1:80/message").Envar("GOTIFY_ENDPOINT").String()
 
 	address     = kingpin.Flag("bind_address", "The address the bridge will listen on").Default("0.0.0.0").Envar("BIND_ADDRESS").IP()
 	port        = kingpin.Flag("port", "The port the bridge will listen on").Default("8080").Envar("PORT").Int()
-	webhookPath = kingpin.Flag("webhookPath", "The URL path to handle requests on").Default("/gotify_webhook").Envar("WEBHOOK_PATH").String()
+	webhookPath = kingpin.Flag("webhook_path", "The URL path to handle requests on").Default("/gotify_webhook").Envar("WEBHOOK_PATH").String()
 	timeout     = kingpin.Flag("timeout", "The number of seconds to wait when connecting to gotify").Default("5s").Envar("TIMEOUT").Duration()
 
-	titleAnnotation    = kingpin.Flag("titleAnnotation", "Annotation holding the title of the alert").Default("description").Envar("TITLE_ANNOTATION").String()
-	messageAnnotation  = kingpin.Flag("messageAnnotation", "Annotation holding the alert message").Default("summary").Envar("SUMMARY_ANNOTATION").String()
-	priorityAnnotation = kingpin.Flag("priorityAnnotation", "Annotation holding the priority of the alert").Default("priority").Envar("PRIORITY_ANNOTATION").String()
-	defaultPriority    = kingpin.Flag("defaultPriority", "Annotation holding the priority of the alert").Default("5").Envar("DEFAULT_PRIORITY").Int()
+	titleAnnotation    = kingpin.Flag("title_annotation", "Annotation holding the title of the alert").Default("description").Envar("TITLE_ANNOTATION").String()
+	messageAnnotation  = kingpin.Flag("message_annotation", "Annotation holding the alert message").Default("summary").Envar("SUMMARY_ANNOTATION").String()
+	priorityAnnotation = kingpin.Flag("priority_annotation", "Annotation holding the priority of the alert").Default("priority").Envar("PRIORITY_ANNOTATION").String()
+	defaultPriority    = kingpin.Flag("default_priority", "Annotation holding the priority of the alert").Default("5").Envar("DEFAULT_PRIORITY").Int()
 
 	authUsername     = kingpin.Flag("metrics_auth_username", "Username for metrics interface basic auth ($AUTH_USERNAME and $AUTH_PASSWORD)").Envar("AUTH_USERNAME").String()
 	authPassword     = ""
 	metricsNamespace = kingpin.Flag("metrics_namespace", "Metrics Namespace ($METRICS_NAMESPACE)").Envar("METRICS_NAMESPACE").Default("alertmanager_gotify_bridge").String()
 	metricsPath      = kingpin.Flag("metrics_path", "Path under which to expose metrics for the bridge ($METRICS_PATH)").Envar("METRICS_PATH").Default("/metrics").String()
+	extendedDetails  = kingpin.Flag("extended_details", "When enabled, alerts are presented in HTML format and include colorized status (FIR|RES), alert start time, and a link to the generator of the alert.").Default("false").Envar("EXTENDED_DETAILS").Bool()
 
-	debug = kingpin.Flag("debug", "Enable debug output of the server").Bool()
-
+	debug   = kingpin.Flag("debug", "Enable debug output of the server").Bool()
 	metrics = make(map[string]int)
 )
 
@@ -116,7 +120,7 @@ func basicAuthHandlerBuilder(parentHandler http.Handler) http.Handler {
 }
 
 func main() {
-	kingpin.Version("0.0.1")
+	kingpin.Version("0.0.2")
 	kingpin.Parse()
 
 	metrics["requests_received"] = 0
@@ -228,6 +232,7 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 		}
 
 		for idx, alert := range notification.Alerts {
+			extras := make(map[string]interface{})
 			proceed := true
 			title := ""
 			message := ""
@@ -238,8 +243,24 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 				log.Printf("  Alert %d", idx)
 			}
 
+			if *extendedDetails {
+				// set text to html
+				extrasContentType := make(map[string]string)
+				extrasContentType["contentType"] = "text/html"
+				extras["client::display"] = extrasContentType
+
+				switch alert.Status {
+				case "resolved":
+					message += "<font style='color: #00b339;' data-mx-color='#00b339'>RESOLVED</font><br/> "
+					title += "[RES] "
+				case "firing":
+					message += "<font style='color: #b31e00;' data-mx-color='#b31e00'>FIRING</font><br/> "
+					title += "[FIR] "
+				}
+			}
+
 			if val, ok := alert.Annotations[*svr.titleAnnotation]; ok {
-				title = val
+				title += val
 				if *svr.debug {
 					log.Printf("    title: %s\n", title)
 				}
@@ -278,6 +299,18 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 
+			if *extendedDetails {
+				if strings.HasPrefix(alert.GeneratorURL, "http") {
+					message += "<br/><a href='" + alert.GeneratorURL + "'>go to source</a>"
+					extrasNotification := make(map[string]map[string]string)
+					extrasNotification["click"]["url"] = alert.GeneratorURL
+					extras["client::notification"] = extrasNotification
+				}
+				if alert.StartsAt != "" {
+					message += "<br/><br/><i><font style='color: #999999;' data-mx-color='#999999'> alert created at: " + alert.StartsAt[:19] + "</font></i><br/>"
+				}
+			}
+
 			if proceed {
 				if *svr.debug {
 					log.Printf("    Required fields found. Dispatching to gotify...\n")
@@ -286,6 +319,7 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 					Title:    title,
 					Message:  message,
 					Priority: priority,
+					Extras:   extras,
 				}
 				msg, _ := json.Marshal(outbound)
 				if *svr.debug {

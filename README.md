@@ -54,6 +54,7 @@ Flags:
   --metrics_namespace="alertmanager_gotify_bridge"
                              Metrics Namespace ($METRICS_NAMESPACE)
   --metrics_path="/metrics"  Path under which to expose metrics for the bridge ($METRICS_PATH)
+  --extended_details         When enabled, alerts are presented in HTML format and include colorized status (FIR|RES), alert start time, and a link to the generator of the alert.
   --debug                    Enable debug output of the server
   --version                  Show application version.
 ```
