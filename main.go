@@ -60,11 +60,11 @@ var (
 
 	debug = kingpin.Flag("debug", "Enable debug output of the server").Bool()
 
-	details = kingpin.Flag("details", "Amount of details in messages. 0 = default, 1 = extended").Default("0").Envar("DETAILS").Int()
+	extended_details = kingpin.Flag("extended_details", "When enabled, alerts are presented in HTML format and include colorized status (FIR|RES), alert start time, and a link to the generator of the alert.").Default("0").Envar("EXTENDED_DETAILS").Bool()
 )
 
 func main() {
-	kingpin.Version("0.0.1")
+	kingpin.Version("0.0.2")
 	kingpin.Parse()
 
 	gotify_token := os.Getenv("GOTIFY_TOKEN")
@@ -172,11 +172,11 @@ func (svr *bridge) handle_call(w http.ResponseWriter, r *http.Request) {
 				log.Printf("  Alert %d", idx)
 			}
 
-			if *details == 1 {
+			if *extended_details {
 				// set text to html
-				contentType := make(map[string]string)
-				contentType["contentType"] = "text/html"
-				extras["client::display"] = contentType
+				extrasContentType := make(map[string]string)
+				extrasContentType["contentType"] = "text/html"
+				extras["client::display"] = extrasContentType
 
 				switch alert.Status {
 				case "resolved":
@@ -228,9 +228,12 @@ func (svr *bridge) handle_call(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 
-			if *details == 1 {
+			if *extended_details {
 				if strings.HasPrefix(alert.GeneratorURL, "http") {
 					message += "<br/><a href='" + alert.GeneratorURL + "'>go to source</a>"
+					extrasNotification := make(map[string]map[string]string)
+					extrasNotification["click"]["url"] = alert.GeneratorURL
+					extras["client::notification"] = extrasNotification
 				}
 				if alert.StartsAt != "" {
 					message += "<br/><br/><i><font style='color: #999999;' data-mx-color='#999999'> alert created at: " + alert.StartsAt[:19] + "</font></i><br/>"

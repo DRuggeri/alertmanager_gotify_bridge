@@ -51,7 +51,7 @@ Flags:
   --default_priority=5         Annotation holding the priority of the alert
   --debug                      Enable debug output of the server
   --version                    Show application version.
-  --details=0                  Amount of details in messages. 0 = default, 1 = extended
+  --extended_details           When enabled, alerts are presented in HTML format and include colorized status (FIR|RES), alert start time, and a link to the generator of the alert.
 ```
 ## Community Contributions
 * A docker container of this bridge is maintained by [ndragon798](https://github.com/ndragon798) on [docker hub](https://hub.docker.com/r/nathaneaston/alertmanager_gotify_bridge-docker)
