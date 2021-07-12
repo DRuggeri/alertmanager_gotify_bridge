@@ -4,10 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/prometheus/common/version"
-	"gopkg.in/alecthomas/kingpin.v2"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -16,6 +12,11 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/prometheus/common/version"
+	"gopkg.in/alecthomas/kingpin.v2"
 )
 
 type bridge struct {
@@ -287,7 +288,7 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 
 			if val, ok := alert.Annotations[*svr.priorityAnnotation]; ok {
 				tmp, err := strconv.Atoi(val)
-				if err != nil {
+				if err == nil {
 					priority = tmp
 					if *svr.debug {
 						log.Printf("    priority: %d\n", priority)
