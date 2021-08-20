@@ -40,6 +40,8 @@ if [[ "$tag" != v* ]];then
   tag="v$tag"
 fi
 
+export tag
+
 #Verify testing is good
 ./test.sh
 
@@ -57,7 +59,7 @@ for GOOS in "${OSs[@]}";do
 
     OUT_FILE="alertmanager_gotify_bridge-$tag-$GOOS-$GOARCH"
     echo "  $OUT_FILE"
-    go build -o "$OUT_FILE" ../
+    go build -ldflags "-X main.BuildVersion='$tag'" -o "$OUT_FILE" ../
     ARTIFACTS+=("$OUT_FILE")
   done
 done
