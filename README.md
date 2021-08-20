@@ -75,3 +75,28 @@ Exported metrics:
 
 ## Community Contributions
 * A docker container of this bridge is maintained by [ndragon798](https://github.com/ndragon798) on [docker hub](https://hub.docker.com/r/nathaneaston/alertmanager_gotify_bridge-docker)
+
+## Testing and Development
+If you would like to experiment and test your bridge configuration, you can simulate Prometheus alerts like so
+
+Start the bridge with your choice of parameters. For example: set a bogus token, enable debug, and listen on port 8080 while accepting all other defaults:
+`
+GOTIFY_TOKEN=FOO ./alertmanager_gotify_bridge --port=8080 --debug
+`
+
+You can then send a request with cURL to see if your configuration works out as expected:
+```
+curl http://127.0.0.1:8080/gotify_webhook -d '
+{ "alerts": [
+  {
+    "annotations": {
+      "description":"A description",
+      "summary":"A summary",
+      "priority":"critical"
+    },
+    "status": "firing",
+    "generatorURL": "http://foobar.com"
+  }
+]}
+'
+```
