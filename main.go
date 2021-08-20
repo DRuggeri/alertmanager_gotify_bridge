@@ -304,6 +304,7 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 				if strings.HasPrefix(alert.GeneratorURL, "http") {
 					message += "<br/><a href='" + alert.GeneratorURL + "'>go to source</a>"
 					extrasNotification := make(map[string]map[string]string)
+					extrasNotification["click"] = make(map[string]string)
 					extrasNotification["click"]["url"] = alert.GeneratorURL
 					extras["client::notification"] = extrasNotification
 				}
