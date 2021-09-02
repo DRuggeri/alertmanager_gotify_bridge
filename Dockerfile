@@ -1,7 +1,4 @@
-# https://github.com/DRuggeri/alertmanager_gotify_bridge/issues/12
-
-ARG ARCH=
-FROM ${ARCH}golang:1.17.0-alpine3.14 AS builder
+FROM golang:1.17.0-alpine3.14 AS builder
 
 RUN apk --no-cache add git
 
