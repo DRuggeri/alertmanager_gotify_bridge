@@ -62,8 +62,8 @@ cd $(dirname $0)/..
 
 vi .release_info.md
 
-git commit -m "Add notes for $TAG" .release_info.md
+git commit -m "Changes for $TAG" .release_info.md
 
 git tag $TAG
-git push origin $TAG
 git push origin
+git push origin $TAG

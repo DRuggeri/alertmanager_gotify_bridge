@@ -13,12 +13,11 @@ jobs:
       matrix:
         go-version:
           - 1.15.x
-#TODO
-#          - 1.16.x
+          - 1.16.x
         os:
           - ubuntu-latest
-#          - macos-latest
-#          - windows-latest
+          - macos-latest
+          - windows-latest
     runs-on: ${{ matrix.os }}
 
     steps:
