@@ -19,7 +19,7 @@ import (
 	"gopkg.in/alecthomas/kingpin.v2"
 )
 
-var BuildVersion string
+var Version string
 
 type bridge struct {
 	server             *http.Server
@@ -123,7 +123,7 @@ func basicAuthHandlerBuilder(parentHandler http.Handler) http.Handler {
 }
 
 func main() {
-	kingpin.Version(BuildVersion)
+	kingpin.Version(Version)
 	kingpin.Parse()
 
 	metrics["requests_received"] = 0

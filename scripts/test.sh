@@ -10,7 +10,7 @@ export GOARCH=""
 #Add this directory to PATH
 export PATH="$PATH:`pwd`"
 
-go build -ldflags "-X main.BuildVersion=testing:$(git rev-list -1 HEAD)" -o "alertmanager_gotify_bridge" ../
+go build -ldflags "-X main.Version=testing:$(git rev-list -1 HEAD)" -o "alertmanager_gotify_bridge" ../
 
 echo "Running tests..."
 cd ../
