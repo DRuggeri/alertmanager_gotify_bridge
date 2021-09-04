@@ -31,10 +31,13 @@ echo "Current tag: v$MAJOR.$MINOR.$PATCH"
 case $1 in
   major)
     MAJOR=$((MAJOR+1))
+    MINOR=0
+    PATCH=0
     TAG="v$MAJOR.$MINOR.$PATCH"
     ;;
   minor)
     MINOR=$((MINOR+1))
+    PATCH=0
     TAG="v$MAJOR.$MINOR.$PATCH"
     ;;
   patch)
