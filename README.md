@@ -73,6 +73,26 @@ Exported metrics:
 - alertmanager_gotify_bridge_gotify_health_health: Whether the /health endpoint returns "green" for "health"
 - alertmanager_gotify_bridge_gotify_health_database: Whether the /health endpoint returns "green" for "database"
 
+## Docker
+The docker image is build with every push to master or tag.
+
+### Docker-Compose
+```
+  alertmanager_gotify_bridge:
+    image: ghcr.io/DRuggeri/alertmanager_gotify_bridge:master
+    container_name: alertmanager_gotify_bridge
+    environment:
+      - GOTIFY_TOKEN=xxxxxxx
+      - GOTIFY_ENDPOINT=http://gotify:80/message
+    ports:
+      - 8080:8080
+    restart: unless-stopped
+```
+Supported tags:
+- master (state of master branch)
+- latest (latest tag or master)
+- vX.X.X (eg. v0.6.0, specific version)
+
 ## Community Contributions
 * A docker container of this bridge is maintained by [ndragon798](https://github.com/ndragon798) on [docker hub](https://hub.docker.com/r/nathaneaston/alertmanager_gotify_bridge-docker)
 
