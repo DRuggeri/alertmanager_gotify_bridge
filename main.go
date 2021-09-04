@@ -51,23 +51,23 @@ type GotifyNotification struct {
 }
 
 var (
-	gotifyEndpoint = kingpin.Flag("gotify_endpoint", "Full path to the Gotify message endpoint").Default("http://127.0.0.1:80/message").Envar("GOTIFY_ENDPOINT").String()
+	gotifyEndpoint = kingpin.Flag("gotify_endpoint", "Full path to the Gotify message endpoint ($GOTIFY_ENDPOINT)").Default("http://127.0.0.1:80/message").Envar("GOTIFY_ENDPOINT").String()
 
-	address     = kingpin.Flag("bind_address", "The address the bridge will listen on").Default("0.0.0.0").Envar("BIND_ADDRESS").IP()
-	port        = kingpin.Flag("port", "The port the bridge will listen on").Default("8080").Envar("PORT").Int()
-	webhookPath = kingpin.Flag("webhook_path", "The URL path to handle requests on").Default("/gotify_webhook").Envar("WEBHOOK_PATH").String()
-	timeout     = kingpin.Flag("timeout", "The number of seconds to wait when connecting to gotify").Default("5s").Envar("TIMEOUT").Duration()
+	address     = kingpin.Flag("bind_address", "The address the bridge will listen on ($BIND_ADDRESS)").Default("0.0.0.0").Envar("BIND_ADDRESS").IP()
+	port        = kingpin.Flag("port", "The port the bridge will listen on ($PORT)").Default("8080").Envar("PORT").Int()
+	webhookPath = kingpin.Flag("webhook_path", "The URL path to handle requests on ($WEBHOOK_PATH)").Default("/gotify_webhook").Envar("WEBHOOK_PATH").String()
+	timeout     = kingpin.Flag("timeout", "The number of seconds to wait when connecting to gotify ($TIMEOUT)").Default("5s").Envar("TIMEOUT").Duration()
 
-	titleAnnotation    = kingpin.Flag("title_annotation", "Annotation holding the title of the alert").Default("description").Envar("TITLE_ANNOTATION").String()
-	messageAnnotation  = kingpin.Flag("message_annotation", "Annotation holding the alert message").Default("summary").Envar("SUMMARY_ANNOTATION").String()
-	priorityAnnotation = kingpin.Flag("priority_annotation", "Annotation holding the priority of the alert").Default("priority").Envar("PRIORITY_ANNOTATION").String()
-	defaultPriority    = kingpin.Flag("default_priority", "Annotation holding the priority of the alert").Default("5").Envar("DEFAULT_PRIORITY").Int()
+	titleAnnotation    = kingpin.Flag("title_annotation", "Annotation holding the title of the alert ($TITLE_ANNOTATION)").Default("summary").Envar("TITLE_ANNOTATION").String()
+	messageAnnotation  = kingpin.Flag("message_annotation", "Annotation holding the alert message ($MESSAGE_ANNOTATION)").Default("description").Envar("MESSAGE_ANNOTATION").String()
+	priorityAnnotation = kingpin.Flag("priority_annotation", "Annotation holding the priority of the alert ($PRIORITY_ANNOTATION)").Default("priority").Envar("PRIORITY_ANNOTATION").String()
+	defaultPriority    = kingpin.Flag("default_priority", "Annotation holding the priority of the alert ($DEFAULT_PRIORITY)").Default("5").Envar("DEFAULT_PRIORITY").Int()
 
 	authUsername     = kingpin.Flag("metrics_auth_username", "Username for metrics interface basic auth ($AUTH_USERNAME and $AUTH_PASSWORD)").Envar("AUTH_USERNAME").String()
 	authPassword     = ""
 	metricsNamespace = kingpin.Flag("metrics_namespace", "Metrics Namespace ($METRICS_NAMESPACE)").Envar("METRICS_NAMESPACE").Default("alertmanager_gotify_bridge").String()
 	metricsPath      = kingpin.Flag("metrics_path", "Path under which to expose metrics for the bridge ($METRICS_PATH)").Envar("METRICS_PATH").Default("/metrics").String()
-	extendedDetails  = kingpin.Flag("extended_details", "When enabled, alerts are presented in HTML format and include colorized status (FIR|RES), alert start time, and a link to the generator of the alert.").Default("false").Envar("EXTENDED_DETAILS").Bool()
+	extendedDetails  = kingpin.Flag("extended_details", "When enabled, alerts are presented in HTML format and include colorized status (FIR|RES), alert start time, and a link to the generator of the alert ($EXTENDED_DETAILS)").Default("false").Envar("EXTENDED_DETAILS").Bool()
 
 	debug   = kingpin.Flag("debug", "Enable debug output of the server").Bool()
 	metrics = make(map[string]int)
