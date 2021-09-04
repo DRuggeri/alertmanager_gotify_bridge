@@ -34,29 +34,28 @@ For example, the environment entry for `gotify_token` may be set as `GOTIFY_TOKE
 usage: alertmanager_gotify_bridge [<flags>]
 
 Flags:
-  --help                     Show context-sensitive help (also try --help-long and --help-man).
+  --help                        Show context-sensitive help (also try --help-long and --help-man).
   --gotify_endpoint="http://127.0.0.1:80/message"
-                             Full path to the Gotify message endpoint
-  --bind_address=0.0.0.0     The address the bridge will listen on
-  --port=8080                The port the bridge will listen on
+                                Full path to the Gotify message endpoint ($GOTIFY_ENDPOINT)
+  --bind_address=0.0.0.0        The address the bridge will listen on ($BIND_ADDRESS)
+  --port=8080                   The port the bridge will listen on ($PORT)
   --webhook_path="/gotify_webhook"
-                             The URL path to handle requests on
-  --timeout=5s               The number of seconds to wait when connecting to gotify
-  --title_annotation="description"
-                             Annotation holding the title of the alert
-  --message_annotation="summary"
-                             Annotation holding the alert message
+                                The URL path to handle requests on ($WEBHOOK_PATH)
+  --timeout=5s                  The number of seconds to wait when connecting to gotify ($TIMEOUT)
+  --title_annotation="summary"  Annotation holding the title of the alert ($TITLE_ANNOTATION)
+  --message_annotation="description"
+                                Annotation holding the alert message ($MESSAGE_ANNOTATION)
   --priority_annotation="priority"
-                             Annotation holding the priority of the alert
-  --default_priority=5       Annotation holding the priority of the alert
+                                Annotation holding the priority of the alert ($PRIORITY_ANNOTATION)
+  --default_priority=5          Annotation holding the priority of the alert ($DEFAULT_PRIORITY)
   --metrics_auth_username=METRICS_AUTH_USERNAME
-                             Username for metrics interface basic auth ($AUTH_USERNAME and $AUTH_PASSWORD)
+                                Username for metrics interface basic auth ($AUTH_USERNAME and $AUTH_PASSWORD)
   --metrics_namespace="alertmanager_gotify_bridge"
-                             Metrics Namespace ($METRICS_NAMESPACE)
-  --metrics_path="/metrics"  Path under which to expose metrics for the bridge ($METRICS_PATH)
-  --extended_details         When enabled, alerts are presented in HTML format and include colorized status (FIR|RES), alert start time, and a link to the generator of the alert.
-  --debug                    Enable debug output of the server
-  --version                  Show application version.
+                                Metrics Namespace ($METRICS_NAMESPACE)
+  --metrics_path="/metrics"     Path under which to expose metrics for the bridge ($METRICS_PATH)
+  --extended_details            When enabled, alerts are presented in HTML format and include colorized status (FIR|RES), alert start time, and a link to the generator of the alert ($EXTENDED_DETAILS)
+  --debug                       Enable debug output of the server
+  --version                     Show application version.
 ```
 
 ## Metrics
@@ -74,7 +73,11 @@ Exported metrics:
 - alertmanager_gotify_bridge_gotify_health_database: Whether the /health endpoint returns "green" for "database"
 
 ## Docker
-The docker image is build with every push to master or tag.
+An official scratch-based Docker image is built with every tag and pushed to DockerHub and ghcr. Additionally, PRs will be tested by GitHubs actions.
+
+The following images are available for use:
+- [druggeri/alertmanager_gotify_bridge](https://hub.docker.com/r/druggeri/alertmanager_gotify_bridge)
+- [ghcr.io/DRuggeri/alertmanager_gotify_bridge](https://ghcr.io/DRuggeri/alertmanager_gotify_bridge)
 
 ### Docker-Compose
 ```
@@ -91,10 +94,11 @@ The docker image is build with every push to master or tag.
 Supported tags:
 - master (state of master branch)
 - latest (latest tag or master)
-- vX.X.X (eg. v0.6.0, specific version)
+- vX.Y.Z (eg. v0.6.0, specific version)
+- vX.Y (latest maj/minor version)
 
 ## Community Contributions
-* A docker container of this bridge is maintained by [ndragon798](https://github.com/ndragon798) on [docker hub](https://hub.docker.com/r/nathaneaston/alertmanager_gotify_bridge-docker)
+* A docker container of this bridge is also maintained by [ndragon798](https://github.com/ndragon798) on [docker hub](https://hub.docker.com/r/nathaneaston/alertmanager_gotify_bridge-docker)
 
 ## Testing and Development
 If you would like to experiment and test your bridge configuration, you can simulate Prometheus alerts like so
