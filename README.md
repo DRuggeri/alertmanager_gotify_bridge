@@ -82,7 +82,7 @@ The following images are available for use:
 ### Docker-Compose
 ```
   alertmanager_gotify_bridge:
-    image: ghcr.io/DRuggeri/alertmanager_gotify_bridge:master
+    image: ghcr.io/druggeri/alertmanager_gotify_bridge:master
     container_name: alertmanager_gotify_bridge
     environment:
       - GOTIFY_TOKEN=xxxxxxx
