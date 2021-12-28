@@ -270,6 +270,7 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 			} else {
 				proceed = false
 				text = []string{fmt.Sprintf("Missing annotation: %s", *svr.titleAnnotation)}
+				respCode = http.StatusBadRequest
 				if *svr.debug {
 					log.Printf("    title annotation (%s) missing\n", *svr.titleAnnotation)
 				}
@@ -283,6 +284,7 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 			} else {
 				proceed = false
 				text = []string{fmt.Sprintf("Missing annotation: %s", *svr.messageAnnotation)}
+				respCode = http.StatusBadRequest
 				if *svr.debug {
 					log.Printf("    message annotation (%s) missing\n", *svr.messageAnnotation)
 				}
@@ -380,6 +382,7 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		text = []string{"No content sent"}
+		respCode = http.StatusBadRequest
 	}
 
 	http.Error(w, strings.Join(text, "\n"), respCode)
