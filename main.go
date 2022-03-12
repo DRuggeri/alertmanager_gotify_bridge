@@ -19,7 +19,7 @@ import (
 	"gopkg.in/alecthomas/kingpin.v2"
 )
 
-var Version string
+var Version = "testing"
 
 type bridge struct {
 	server             *http.Server
