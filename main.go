@@ -9,8 +9,10 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
+	"text/template"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -41,6 +43,7 @@ type Alert struct {
 	Status       string
 	GeneratorURL string
 	StartsAt     string
+	ValueString  string
 }
 
 type GotifyNotification struct {
@@ -263,7 +266,29 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 			}
 
 			if val, ok := alert.Annotations[*svr.titleAnnotation]; ok {
-				title += val
+				titleTemplate, err := template.New("title").Parse(val)
+				if err != nil {
+					proceed = false
+					text = []string{fmt.Sprintf("Error in Template: %s", err)}
+					respCode = http.StatusBadRequest
+					if *svr.debug {
+						log.Printf("    error in template: %s\n", err)
+					}
+				} else {
+					var templatedTitle bytes.Buffer
+					err = titleTemplate.ExecuteTemplate(&templatedTitle, "title", alert)
+					if err != nil {
+						proceed = false
+						text = []string{fmt.Sprintf("Error in Template: %s", err)}
+						respCode = http.StatusBadRequest
+						if *svr.debug {
+							log.Printf("    error in template: %s\n", err)
+						}
+					} else {
+						title += templatedTitle.String()
+					}
+				}
+
 				if *svr.debug {
 					log.Printf("    title: %s\n", title)
 				}
@@ -277,7 +302,29 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 			}
 
 			if val, ok := alert.Annotations[*svr.messageAnnotation]; ok {
-				message = val
+				messageTemplate, err := template.New("message").Parse(val)
+				if err != nil {
+					proceed = false
+					text = []string{fmt.Sprintf("Error in Template: %s", err)}
+					respCode = http.StatusBadRequest
+					if *svr.debug {
+						log.Printf("    error in template: %s\n", err)
+					}
+				} else {
+					var templatedMessage bytes.Buffer
+					err = messageTemplate.ExecuteTemplate(&templatedMessage, "message", alert)
+					if err != nil {
+						proceed = false
+						text = []string{fmt.Sprintf("Error in Template: %s", err)}
+						respCode = http.StatusBadRequest
+						if *svr.debug {
+							log.Printf("    error in template: %s\n", err)
+						}
+					} else {
+						message = templatedMessage.String()
+					}
+				}
+
 				if *svr.debug {
 					log.Printf("    message: %s\n", message)
 				}
@@ -387,4 +434,39 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 
 	http.Error(w, strings.Join(text, "\n"), respCode)
 	return
+}
+
+type AlertValues struct {
+	Metric string
+	Labels map[string]string
+	Value  float64
+}
+
+func (a Alert) Values() []AlertValues {
+	listRegx := regexp.MustCompile("\\[ ?metric='(.*?)' ?labels=\\{(.*?)\\} ?value=(.*?) ?\\]")
+	list := listRegx.FindAllStringSubmatch(a.ValueString, -1)
+
+	var alertValues []AlertValues
+
+	for _, query := range list {
+		metric := query[1]
+		labelsString := query[2]
+		value, err := strconv.ParseFloat(query[3], 32)
+		if err != nil {
+			value = -1
+		}
+
+		labelRegx := regexp.MustCompile("([^=, ]+?)=([^=, ]+)")
+		labelsList := labelRegx.FindAllStringSubmatch(labelsString, -1)
+
+		labels := make(map[string]string)
+
+		for _, value := range labelsList {
+			labels[value[1]] = value[2]
+		}
+
+		alertValues = append(alertValues, AlertValues{Metric: metric, Labels: labels, Value: value})
+	}
+
+	return alertValues
 }
