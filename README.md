@@ -54,8 +54,28 @@ Flags:
                                 Metrics Namespace ($METRICS_NAMESPACE)
   --metrics_path="/metrics"     Path under which to expose metrics for the bridge ($METRICS_PATH)
   --extended_details            When enabled, alerts are presented in HTML format and include colorized status (FIR|RES), alert start time, and a link to the generator of the alert ($EXTENDED_DETAILS)
+  --dispatch_errors             When enabled, alerts will be tried to dispatch with a error-message regarding faulty templating or missing fields to help debugging ($DISPATCH_ERRORS)
   --debug                       Enable debug output of the server
   --version                     Show application version.
+```
+
+### Templating
+The bridge now supports [Go templating](https://golang.org/pkg/text/template/), so you can customize the alertmessages further.  
+For example add following line to the title:  
+`{{if eq .Status "firing"}}🔥{{else}}✅{{end}}`  
+This differentiates firing from resolving alerts.  
+  
+Also, there are two methods you can use for additional customisation:
+```
+.Values                 Access alert-values, -labels and -metrics. 
+                        Returns list of:
+                            Metric  string
+                            Labels  map[string]string
+                            Value   float64
+              
+.Humanize <float64>     Rounds float and stripps trailing zeros to return more readable float.
+                        .Humanize 5.3234134 returns 5.32
+                        .Humanize 5.0       returns 5
 ```
 
 ## Metrics
