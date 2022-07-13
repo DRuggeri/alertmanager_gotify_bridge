@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"math"
 	"net/http"
 	"net/url"
 	"os"
@@ -15,6 +16,7 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/common/version"
@@ -469,4 +471,9 @@ func (a Alert) Values() []AlertValues {
 	}
 
 	return alertValues
+}
+
+func (a Alert) Humanize(in float64) string {
+	in = math.Round(in*100) / 100
+	return humanize.Ftoa(in)
 }
