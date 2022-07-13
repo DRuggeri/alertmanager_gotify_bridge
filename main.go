@@ -35,6 +35,7 @@ type bridge struct {
 	defaultPriority    *int
 	gotifyToken        *string
 	gotifyEndpoint     *string
+	dispatchErrors     *bool
 }
 
 type Notification struct {
@@ -73,6 +74,7 @@ var (
 	metricsNamespace = kingpin.Flag("metrics_namespace", "Metrics Namespace ($METRICS_NAMESPACE)").Envar("METRICS_NAMESPACE").Default("alertmanager_gotify_bridge").String()
 	metricsPath      = kingpin.Flag("metrics_path", "Path under which to expose metrics for the bridge ($METRICS_PATH)").Envar("METRICS_PATH").Default("/metrics").String()
 	extendedDetails  = kingpin.Flag("extended_details", "When enabled, alerts are presented in HTML format and include colorized status (FIR|RES), alert start time, and a link to the generator of the alert ($EXTENDED_DETAILS)").Default("false").Envar("EXTENDED_DETAILS").Bool()
+	dispatchErrors   = kingpin.Flag("dispatch_errors", "When enabled, alerts will be tried to dispatch with a error-message regarding faulty templating or missing fields to help debugging ($DISPATCH_ERRORS)").Default("false").Envar("DISPATCH_ERRORS").Bool()
 
 	debug   = kingpin.Flag("debug", "Enable debug output of the server").Bool()
 	metrics = make(map[string]int)
@@ -177,6 +179,7 @@ func main() {
 		defaultPriority:    defaultPriority,
 		gotifyToken:        &gotifyToken,
 		gotifyEndpoint:     gotifyEndpoint,
+		dispatchErrors:     dispatchErrors,
 	}
 
 	serverMux := http.NewServeMux()
@@ -248,7 +251,7 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 
 			metrics["alerts_received"]++
 			if *svr.debug {
-				log.Printf("  Alert %d", idx)
+				log.Printf("Alert %d", idx)
 			}
 
 			if *extendedDetails {
@@ -271,20 +274,32 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 				titleTemplate, err := template.New("title").Parse(val)
 				if err != nil {
 					proceed = false
-					text = []string{fmt.Sprintf("Error in Template: %s", err)}
+					errMsg := fmt.Sprintf("Error in Template: %s", err)
+					text = []string{errMsg}
 					respCode = http.StatusBadRequest
 					if *svr.debug {
-						log.Printf("    error in template: %s\n", err)
+						log.Println(errMsg)
+					}
+					if *svr.dispatchErrors {
+						proceed = true
+						title = "Alertmanager-Gotify-Bridge Error"
+						message = fmt.Sprintf("Error: %s\n\nAlso check Alertmanager, maybe an alert was raised!\n\nIcomming request:\n%s", errMsg, b)
 					}
 				} else {
 					var templatedTitle bytes.Buffer
 					err = titleTemplate.ExecuteTemplate(&templatedTitle, "title", alert)
 					if err != nil {
 						proceed = false
-						text = []string{fmt.Sprintf("Error in Template: %s", err)}
+						errMsg := fmt.Sprintf("Error in Template: %s", err)
+						text = []string{errMsg}
 						respCode = http.StatusBadRequest
 						if *svr.debug {
-							log.Printf("    error in template: %s\n", err)
+							log.Println(errMsg)
+						}
+						if *svr.dispatchErrors {
+							proceed = true
+							title = "Alertmanager-Gotify-Bridge Error"
+							message = fmt.Sprintf("Error: %s\n\nAlso check Alertmanager, maybe an alert was raised!\n\nIcomming request:\n%s", errMsg, b)
 						}
 					} else {
 						title += templatedTitle.String()
@@ -292,14 +307,20 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 				}
 
 				if *svr.debug {
-					log.Printf("    title: %s\n", title)
+					log.Printf("title: %s\n", title)
 				}
 			} else {
 				proceed = false
-				text = []string{fmt.Sprintf("Missing annotation: %s", *svr.titleAnnotation)}
+				errMsg := fmt.Sprintf("Missing annotation: %s", *svr.titleAnnotation)
+				text = []string{errMsg}
 				respCode = http.StatusBadRequest
 				if *svr.debug {
-					log.Printf("    title annotation (%s) missing\n", *svr.titleAnnotation)
+					log.Println(errMsg)
+				}
+				if *svr.dispatchErrors {
+					proceed = true
+					title = "Alertmanager-Gotify-Bridge Error"
+					message = fmt.Sprintf("Error: %s\n\nAlso check Alertmanager, maybe an alert was raised!\n\nIcomming request:\n%s", errMsg, b)
 				}
 			}
 
@@ -307,20 +328,32 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 				messageTemplate, err := template.New("message").Parse(val)
 				if err != nil {
 					proceed = false
-					text = []string{fmt.Sprintf("Error in Template: %s", err)}
+					errMsg := fmt.Sprintf("Error in Template: %s", err)
+					text = []string{errMsg}
 					respCode = http.StatusBadRequest
 					if *svr.debug {
-						log.Printf("    error in template: %s\n", err)
+						log.Println(errMsg)
+					}
+					if *svr.dispatchErrors {
+						proceed = true
+						title = "Alertmanager-Gotify-Bridge Error"
+						message = fmt.Sprintf("Error: %s\n\nAlso check Alertmanager, maybe an alert was raised!\n\nIcomming request:\n%s", errMsg, b)
 					}
 				} else {
 					var templatedMessage bytes.Buffer
 					err = messageTemplate.ExecuteTemplate(&templatedMessage, "message", alert)
 					if err != nil {
 						proceed = false
-						text = []string{fmt.Sprintf("Error in Template: %s", err)}
+						errMsg := fmt.Sprintf("Error in Template: %s", err)
+						text = []string{errMsg}
 						respCode = http.StatusBadRequest
 						if *svr.debug {
-							log.Printf("    error in template: %s\n", err)
+							log.Println(errMsg)
+						}
+						if *svr.dispatchErrors {
+							proceed = true
+							title = "Alertmanager-Gotify-Bridge Error"
+							message = fmt.Sprintf("Error: %s\n\nAlso check Alertmanager, maybe an alert was raised!\n\nIcomming request:\n%s", errMsg, b)
 						}
 					} else {
 						message = templatedMessage.String()
@@ -328,14 +361,20 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 				}
 
 				if *svr.debug {
-					log.Printf("    message: %s\n", message)
+					log.Printf("message: %s\n", message)
 				}
 			} else {
 				proceed = false
-				text = []string{fmt.Sprintf("Missing annotation: %s", *svr.messageAnnotation)}
+				errMsg := fmt.Sprintf("Missing annotation: %s", *svr.messageAnnotation)
+				text = []string{errMsg}
 				respCode = http.StatusBadRequest
 				if *svr.debug {
-					log.Printf("    message annotation (%s) missing\n", *svr.messageAnnotation)
+					log.Println(errMsg)
+				}
+				if *svr.dispatchErrors {
+					proceed = true
+					title = "Alertmanager-Gotify-Bridge Error"
+					message = fmt.Sprintf("Error: %s\n\nAlso check Alertmanager, maybe an alert was raised!\n\nIcomming request:\n%s", errMsg, b)
 				}
 			}
 
@@ -344,12 +383,12 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 				if err == nil {
 					priority = tmp
 					if *svr.debug {
-						log.Printf("    priority: %d\n", priority)
+						log.Printf("priority: %d\n", priority)
 					}
 				}
 			} else {
 				if *svr.debug {
-					log.Printf("    priority annotation (%s) missing - falling back to default (%d)\n", *svr.priorityAnnotation, *svr.defaultPriority)
+					log.Printf("priority annotation (%s) missing - falling back to default (%d)\n", *svr.priorityAnnotation, *svr.defaultPriority)
 				}
 			}
 
@@ -368,7 +407,7 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 
 			if proceed {
 				if *svr.debug {
-					log.Printf("    Required fields found. Dispatching to gotify...\n")
+					log.Printf("Dispatching to gotify...\n")
 				}
 				outbound := GotifyNotification{
 					Title:    title,
@@ -378,7 +417,7 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 				}
 				msg, _ := json.Marshal(outbound)
 				if *svr.debug {
-					log.Printf("    Outbound: %s\n", string(msg))
+					log.Printf("Outbound: %s\n", string(msg))
 				}
 
 				client := http.Client{
@@ -406,7 +445,7 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 					defer resp.Body.Close()
 					body, _ := ioutil.ReadAll(resp.Body)
 					if *svr.debug {
-						log.Printf("    Dispatched! Response was %s\n", body)
+						log.Printf("Dispatched! Response was %s\n", body)
 					}
 					if resp.StatusCode != 200 {
 						log.Printf("Non-200 response from gotify at %s. Code: %d, Status: %s (enable debug to see body)",
@@ -422,7 +461,7 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 				}
 			} else {
 				if *svr.debug {
-					log.Printf("    Unable to dispatch!\n")
+					log.Printf("Unable to dispatch!\n")
 					respCode = http.StatusBadRequest
 					text = []string{"Incomplete request"}
 					metrics["alerts_invalid"]++
