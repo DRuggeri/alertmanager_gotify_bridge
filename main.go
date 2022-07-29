@@ -44,6 +44,7 @@ type Notification struct {
 type Alert struct {
 	Annotations  map[string]string
 	Status       string
+	Labels       map[string]string
 	GeneratorURL string
 	StartsAt     string
 	ValueString  string
