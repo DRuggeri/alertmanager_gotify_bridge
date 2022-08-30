@@ -60,7 +60,7 @@ Flags:
 ```
 
 ### Templating
-The bridge now supports [Go templating](https://golang.org/pkg/text/template/), so you can customize the alertmessages further.  
+The bridge now supports [Go templating](https://golang.org/pkg/text/template/), so you can customize the alert messages further with templates in the title and message annotations, that you can configure in the Grafana alertmanager section.  
 For example add following line to the title:  
 `{{if eq .Status "firing"}}🔥{{else}}✅{{end}}`  
 This differentiates firing from resolving alerts.  
@@ -77,6 +77,20 @@ Also, there are two methods you can use for additional customisation:
                         .Humanize 5.3234134 returns 5.32
                         .Humanize 5.0       returns 5
 ```
+To give further information and examples for use-cases for these methods:
+Imagine a simple uptime-metric for multiple instances or jobs. If you configure an alert, it would fire if any instance or alert is down. The message would probably say something like "an instance or job is down".
+But from the message you would not know which of the jobs or instances is the down one, or if there are multiple. To address this you have to use the `.Values` method. A alert-description could look like this:
+```
+{{if eq .Status "firing"}}
+Following Providers are down: 
+{{range $i, $provider := .Values}}
+{{$provider.Labels.job}}, 
+{{end}}
+{{else}}
+All providers are back up
+{{end}}
+```
+Now if the alert fires it would list the jobs that are down. Which information the `.Values` method contains can be inspected in the Grafana alertmanager when configuring an alert and clicking the `Preview Alert` button.
 
 ## Metrics
 The bridge tracks telemetry data for metrics within the server as well as exposes gotify's health (obtained via the /health endpoint) as prometheus metrics. Therefore, the bridge can be scraped with Prometheus on /metrics to obtain these metrics.
