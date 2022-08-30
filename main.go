@@ -272,39 +272,21 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 			}
 
 			if val, ok := alert.Annotations[*svr.titleAnnotation]; ok {
-				titleTemplate, err := template.New("title").Parse(val)
+				templatedTitle, err := renderTemplate(val, alert)
 				if err != nil {
 					proceed = false
-					errMsg := fmt.Sprintf("Error in Template: %s", err)
-					text = []string{errMsg}
+					text = []string{err.Error()}
 					respCode = http.StatusBadRequest
 					if *svr.debug {
-						log.Println(errMsg)
+						log.Println(err.Error())
 					}
 					if *svr.dispatchErrors {
 						proceed = true
 						title = "Alertmanager-Gotify-Bridge Error"
-						message = fmt.Sprintf("    Error: %s\n\nAlso check Alertmanager, maybe an alert was raised!\n\nIcomming request:\n%s", errMsg, b)
+						message = fmt.Sprintf("    Error: %s\n\nAlso check Alertmanager, maybe an alert was raised!\n\nIcomming request:\n%s", err.Error(), b)
 					}
 				} else {
-					var templatedTitle bytes.Buffer
-					err = titleTemplate.ExecuteTemplate(&templatedTitle, "title", alert)
-					if err != nil {
-						proceed = false
-						errMsg := fmt.Sprintf("Error in Template: %s", err)
-						text = []string{errMsg}
-						respCode = http.StatusBadRequest
-						if *svr.debug {
-							log.Println(errMsg)
-						}
-						if *svr.dispatchErrors {
-							proceed = true
-							title = "Alertmanager-Gotify-Bridge Error"
-							message = fmt.Sprintf("    Error: %s\n\nAlso check Alertmanager, maybe an alert was raised!\n\nIcomming request:\n%s", errMsg, b)
-						}
-					} else {
-						title += templatedTitle.String()
-					}
+					title += templatedTitle
 				}
 
 				if *svr.debug {
@@ -326,38 +308,18 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 			}
 
 			if val, ok := alert.Annotations[*svr.messageAnnotation]; ok {
-				messageTemplate, err := template.New("message").Parse(val)
+				message, err = renderTemplate(val, alert)
 				if err != nil {
 					proceed = false
-					errMsg := fmt.Sprintf("Error in Template: %s", err)
-					text = []string{errMsg}
+					text = []string{err.Error()}
 					respCode = http.StatusBadRequest
 					if *svr.debug {
-						log.Println(errMsg)
+						log.Println(err.Error())
 					}
 					if *svr.dispatchErrors {
 						proceed = true
 						title = "Alertmanager-Gotify-Bridge Error"
-						message = fmt.Sprintf("    Error: %s\n\nAlso check Alertmanager, maybe an alert was raised!\n\nIcomming request:\n%s", errMsg, b)
-					}
-				} else {
-					var templatedMessage bytes.Buffer
-					err = messageTemplate.ExecuteTemplate(&templatedMessage, "message", alert)
-					if err != nil {
-						proceed = false
-						errMsg := fmt.Sprintf("Error in Template: %s", err)
-						text = []string{errMsg}
-						respCode = http.StatusBadRequest
-						if *svr.debug {
-							log.Println(errMsg)
-						}
-						if *svr.dispatchErrors {
-							proceed = true
-							title = "Alertmanager-Gotify-Bridge Error"
-							message = fmt.Sprintf("    Error: %s\n\nAlso check Alertmanager, maybe an alert was raised!\n\nIcomming request:\n%s", errMsg, b)
-						}
-					} else {
-						message = templatedMessage.String()
+						message = fmt.Sprintf("    Error: %s\n\nAlso check Alertmanager, maybe an alert was raised!\n\nIcomming request:\n%s", err.Error(), b)
 					}
 				}
 
@@ -476,6 +438,21 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 
 	http.Error(w, strings.Join(text, "\n"), respCode)
 	return
+}
+
+func renderTemplate(templateString string, data interface{}) (string, error) {
+	titleTemplate, err := template.New("tmp").Parse(templateString)
+	if err != nil {
+		return "", fmt.Errorf("error in Template: %s", err)
+	}
+
+	var templatedTitle bytes.Buffer
+	err = titleTemplate.ExecuteTemplate(&templatedTitle, "tmp", data)
+	if err != nil {
+		return "", fmt.Errorf("error in Template: %s", err)
+	}
+
+	return templatedTitle.String(), nil
 }
 
 type AlertValues struct {
