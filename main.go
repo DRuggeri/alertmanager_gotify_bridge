@@ -6,13 +6,17 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"math"
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
+	"text/template"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/common/version"
@@ -31,6 +35,7 @@ type bridge struct {
 	defaultPriority    *int
 	gotifyToken        *string
 	gotifyEndpoint     *string
+	dispatchErrors     *bool
 }
 
 type Notification struct {
@@ -39,8 +44,10 @@ type Notification struct {
 type Alert struct {
 	Annotations  map[string]string
 	Status       string
+	Labels       map[string]string
 	GeneratorURL string
 	StartsAt     string
+	ValueString  string
 }
 
 type GotifyNotification struct {
@@ -68,6 +75,7 @@ var (
 	metricsNamespace = kingpin.Flag("metrics_namespace", "Metrics Namespace ($METRICS_NAMESPACE)").Envar("METRICS_NAMESPACE").Default("alertmanager_gotify_bridge").String()
 	metricsPath      = kingpin.Flag("metrics_path", "Path under which to expose metrics for the bridge ($METRICS_PATH)").Envar("METRICS_PATH").Default("/metrics").String()
 	extendedDetails  = kingpin.Flag("extended_details", "When enabled, alerts are presented in HTML format and include colorized status (FIR|RES), alert start time, and a link to the generator of the alert ($EXTENDED_DETAILS)").Default("false").Envar("EXTENDED_DETAILS").Bool()
+	dispatchErrors   = kingpin.Flag("dispatch_errors", "When enabled, alerts will be tried to dispatch with a error-message regarding faulty templating or missing fields to help debugging ($DISPATCH_ERRORS)").Default("false").Envar("DISPATCH_ERRORS").Bool()
 
 	debug   = kingpin.Flag("debug", "Enable debug output of the server").Bool()
 	metrics = make(map[string]int)
@@ -172,6 +180,7 @@ func main() {
 		defaultPriority:    defaultPriority,
 		gotifyToken:        &gotifyToken,
 		gotifyEndpoint:     gotifyEndpoint,
+		dispatchErrors:     dispatchErrors,
 	}
 
 	serverMux := http.NewServeMux()
@@ -243,7 +252,7 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 
 			metrics["alerts_received"]++
 			if *svr.debug {
-				log.Printf("  Alert %d", idx)
+				log.Printf("    Alert %d", idx)
 			}
 
 			if *extendedDetails {
@@ -263,30 +272,72 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 			}
 
 			if val, ok := alert.Annotations[*svr.titleAnnotation]; ok {
-				title += val
+				templatedTitle, err := renderTemplate(val, alert)
+				if err != nil {
+					proceed = false
+					text = []string{err.Error()}
+					respCode = http.StatusBadRequest
+					if *svr.debug {
+						log.Println(err.Error())
+					}
+					if *svr.dispatchErrors {
+						proceed = true
+						title = "Alertmanager-Gotify-Bridge Error"
+						message = fmt.Sprintf("    Error: %s\n\nAlso check Alertmanager, maybe an alert was raised!\n\nIcomming request:\n%s", err.Error(), b)
+					}
+				} else {
+					title += templatedTitle
+				}
+
 				if *svr.debug {
 					log.Printf("    title: %s\n", title)
 				}
 			} else {
 				proceed = false
-				text = []string{fmt.Sprintf("Missing annotation: %s", *svr.titleAnnotation)}
+				errMsg := fmt.Sprintf("Missing annotation: %s", *svr.titleAnnotation)
+				text = []string{errMsg}
 				respCode = http.StatusBadRequest
 				if *svr.debug {
-					log.Printf("    title annotation (%s) missing\n", *svr.titleAnnotation)
+					log.Println(errMsg)
+				}
+				if *svr.dispatchErrors {
+					proceed = true
+					title = "Alertmanager-Gotify-Bridge Error"
+					message = fmt.Sprintf("    Error: %s\n\nAlso check Alertmanager, maybe an alert was raised!\n\nIcomming request:\n%s", errMsg, b)
 				}
 			}
 
 			if val, ok := alert.Annotations[*svr.messageAnnotation]; ok {
-				message = val
+				message, err = renderTemplate(val, alert)
+				if err != nil {
+					proceed = false
+					text = []string{err.Error()}
+					respCode = http.StatusBadRequest
+					if *svr.debug {
+						log.Println(err.Error())
+					}
+					if *svr.dispatchErrors {
+						proceed = true
+						title = "Alertmanager-Gotify-Bridge Error"
+						message = fmt.Sprintf("    Error: %s\n\nAlso check Alertmanager, maybe an alert was raised!\n\nIcomming request:\n%s", err.Error(), b)
+					}
+				}
+
 				if *svr.debug {
 					log.Printf("    message: %s\n", message)
 				}
 			} else {
 				proceed = false
-				text = []string{fmt.Sprintf("Missing annotation: %s", *svr.messageAnnotation)}
+				errMsg := fmt.Sprintf("Missing annotation: %s", *svr.messageAnnotation)
+				text = []string{errMsg}
 				respCode = http.StatusBadRequest
 				if *svr.debug {
-					log.Printf("    message annotation (%s) missing\n", *svr.messageAnnotation)
+					log.Println(errMsg)
+				}
+				if *svr.dispatchErrors {
+					proceed = true
+					title = "Alertmanager-Gotify-Bridge Error"
+					message = fmt.Sprintf("    Error: %s\n\nAlso check Alertmanager, maybe an alert was raised!\n\nIcomming request:\n%s", errMsg, b)
 				}
 			}
 
@@ -319,7 +370,7 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 
 			if proceed {
 				if *svr.debug {
-					log.Printf("    Required fields found. Dispatching to gotify...\n")
+					log.Printf("    Dispatching to gotify...\n")
 				}
 				outbound := GotifyNotification{
 					Title:    title,
@@ -338,7 +389,7 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 
 				request, err := http.NewRequest("POST", *svr.gotifyEndpoint, bytes.NewBuffer(msg))
 				if err != nil {
-					log.Printf("Error setting up request: %s", err)
+					log.Printf("    Error setting up request: %s", err)
 					http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 					metrics["alerts_failed"]++
 					return
@@ -348,7 +399,7 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 
 				resp, err := client.Do(request)
 				if err != nil {
-					log.Printf("Error dispatching to Gotify: %s", err)
+					log.Printf("    Error dispatching to Gotify: %s", err)
 					respCode = http.StatusInternalServerError
 					text = append(text, err.Error())
 					metrics["alerts_failed"]++
@@ -387,4 +438,59 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 
 	http.Error(w, strings.Join(text, "\n"), respCode)
 	return
+}
+
+func renderTemplate(templateString string, data interface{}) (string, error) {
+	titleTemplate, err := template.New("tmp").Parse(templateString)
+	if err != nil {
+		return "", fmt.Errorf("error in Template: %s", err)
+	}
+
+	var templatedTitle bytes.Buffer
+	err = titleTemplate.ExecuteTemplate(&templatedTitle, "tmp", data)
+	if err != nil {
+		return "", fmt.Errorf("error in Template: %s", err)
+	}
+
+	return templatedTitle.String(), nil
+}
+
+type AlertValues struct {
+	Metric string
+	Labels map[string]string
+	Value  float64
+}
+
+func (a Alert) Values() []AlertValues {
+	listRegx := regexp.MustCompile("\\[ ?metric='(.*?)' ?labels=\\{(.*?)\\} ?value=(.*?) ?\\]")
+	list := listRegx.FindAllStringSubmatch(a.ValueString, -1)
+
+	var alertValues []AlertValues
+
+	for _, query := range list {
+		metric := query[1]
+		labelsString := query[2]
+		value, err := strconv.ParseFloat(query[3], 32)
+		if err != nil {
+			value = -1
+		}
+
+		labelRegx := regexp.MustCompile("([^=, ]+?)=([^=, ]+)")
+		labelsList := labelRegx.FindAllStringSubmatch(labelsString, -1)
+
+		labels := make(map[string]string)
+
+		for _, value := range labelsList {
+			labels[value[1]] = value[2]
+		}
+
+		alertValues = append(alertValues, AlertValues{Metric: metric, Labels: labels, Value: value})
+	}
+
+	return alertValues
+}
+
+func (a Alert) Humanize(in float64) string {
+	in = math.Round(in*100) / 100
+	return humanize.Ftoa(in)
 }
