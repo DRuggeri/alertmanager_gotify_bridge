@@ -202,10 +202,32 @@ func main() {
 
 func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 	var notification Notification
+	var token string
 	text := []string{}
 	respCode := http.StatusOK
 
 	metrics["requests_received"]++
+
+	if strings.Contains(r.RequestURI, "/gotify_webhook?token=") {
+		splitToken := strings.Split(r.RequestURI, "/gotify_webhook?token=")
+		if len(splitToken) == 2 && splitToken[1] != "" {
+			appToken := splitToken[1]
+			if *svr.debug {
+				fmt.Printf("Gotify application token (%s) found in request URI - overriding default token: (%s)\n", appToken, *svr.gotifyToken)
+			}
+			token = appToken
+		} else {
+			if *svr.debug {
+				log.Printf("    request uri application token prefix (%s) is defined but missing the token - falling back to default (%s)\n", r.RequestURI, *svr.gotifyToken)
+			}
+			token = *svr.gotifyToken
+		}
+	} else {
+		if *svr.debug {
+			log.Printf("    request uri (%s) application token prefix (?token=) is missing - falling back to default (%s)\n", r.RequestURI, *svr.gotifyToken)
+		}
+		token = *svr.gotifyToken
+	}
 
 	/* Assume this will never fail */
 	b, _ := ioutil.ReadAll(r.Body)
@@ -395,7 +417,7 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 				request.Header.Set("Content-Type", "application/json")
-				request.Header.Set("X-Gotify-Key", *svr.gotifyToken)
+				request.Header.Set("X-Gotify-Key", token)
 
 				resp, err := client.Do(request)
 				if err != nil {
