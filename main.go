@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -13,13 +14,13 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"text/template"
 	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/common/version"
+	"github.com/prometheus/prometheus/template"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
 
@@ -463,18 +464,48 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 }
 
 func renderTemplate(templateString string, data interface{}) (string, error) {
-	titleTemplate, err := template.New("tmp").Parse(templateString)
-	if err != nil {
-		return "", fmt.Errorf("error in Template: %s", err)
+	var result string
+	var err error
+	var unsupportedFunc string
+
+	//Excludes unsupported template function calls.
+	switch {
+	case (strings.Contains(templateString, "{{ query") || strings.Contains(templateString, "{{query")):
+		unsupportedFunc = "query"
+	case (strings.Contains(templateString, "{{ first") || strings.Contains(templateString, "{{first")):
+		unsupportedFunc = "first"
+	case (strings.Contains(templateString, "{{ label") || strings.Contains(templateString, "{{label")):
+		unsupportedFunc = "label"
+	case (strings.Contains(templateString, "{{ value") || strings.Contains(templateString, "{{value")):
+		unsupportedFunc = "value"
+	case (strings.Contains(templateString, "{{ strvalue") || strings.Contains(templateString, "{{strvalue")):
+		unsupportedFunc = "strvalue"
+	case (strings.Contains(templateString, "{{ safeHtml") || strings.Contains(templateString, "{{safeHtml")):
+		unsupportedFunc = "safeHtml"
+	case (strings.Contains(templateString, "{{ graphLink") || strings.Contains(templateString, "{{graphLink")):
+		unsupportedFunc = "graphLink"
+	case (strings.Contains(templateString, "{{ sortByLabel") || strings.Contains(templateString, "{{sortByLabel")):
+		unsupportedFunc = "sortByLabel"
+	case (strings.Contains(templateString, "{{ pathPrefix") || strings.Contains(templateString, "{{pathPrefix")):
+		unsupportedFunc = "pathPrefix"
+	case (strings.Contains(templateString, "{{ externalURL") || strings.Contains(templateString, "{{externalURL")):
+		unsupportedFunc = "externalURL"
+	default:
+		unsupportedFunc = ""
 	}
 
-	var templatedTitle bytes.Buffer
-	err = titleTemplate.ExecuteTemplate(&templatedTitle, "tmp", data)
-	if err != nil {
-		return "", fmt.Errorf("error in Template: %s", err)
-	}
+	if unsupportedFunc == "" {
+		titleTemplate := template.NewTemplateExpander(context.Background(), templateString, "tmp", data, 0, nil, nil, nil)
+		result, err = titleTemplate.Expand()
+		if err != nil {
+			return "", fmt.Errorf("error in Template: %s", err)
+		}
 
-	return templatedTitle.String(), nil
+		result = strings.ReplaceAll(result, "<no value>", "[no value]")
+		return result, err
+	} else {
+		return "", fmt.Errorf("error in Template: The bridge does not support the function %s", unsupportedFunc)
+	}
 }
 
 type AlertValues struct {
