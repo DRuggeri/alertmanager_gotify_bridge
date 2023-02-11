@@ -3,12 +3,13 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/prometheus/client_golang/prometheus"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 type MetricsCollector struct {
@@ -41,7 +42,7 @@ func (c *MetricsCollector) Collect(ch chan<- prometheus.Metric) {
 	   a user has the string /message in the path (via proxies or whatnot) */
 
 	gotifyUpDesc := prometheus.NewDesc(prometheus.BuildFQName(c.namespace, "", "gotify_up"),
-		fmt.Sprintf("Base scrape status for Gotify"),
+		"Base scrape status for Gotify",
 		nil, nil,
 	)
 
