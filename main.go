@@ -215,7 +215,7 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 	appToken := r.URL.Query().Get("token")
 	if appToken != "" {
 		if *svr.debug {
-			fmt.Printf("Gotify application token (%s) found in request URI - overriding default token: (%s)\n", appToken, *svr.gotifyToken)
+			log.Printf("Gotify application token (%s) found in request URI - overriding default token: (%s)\n", appToken, *svr.gotifyToken)
 		}
 		token = appToken
 	} else {
@@ -276,7 +276,7 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 			if alert.ExternalURL != "" {
 				externalURL, err = url.Parse(alert.ExternalURL)
 				if err != nil {
-					fmt.Printf("External URL Format Error: %s", err)
+					log.Printf("External URL Format Error: %s", err)
 				}
 			}
 
@@ -468,38 +468,13 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 func renderTemplate(templateString string, data interface{}, externalURL *url.URL) (string, error) {
 	var result string
 	var err error
-	var unsupportedFunc string
 
-	//Excludes unsupported template function calls.
-	switch {
-	case (strings.Contains(templateString, "{{ query") || strings.Contains(templateString, "{{query")):
-		unsupportedFunc = "query"
-	case (strings.Contains(templateString, "{{ first") || strings.Contains(templateString, "{{first")):
-		unsupportedFunc = "first"
-	case (strings.Contains(templateString, "{{ label") || strings.Contains(templateString, "{{label")):
-		unsupportedFunc = "label"
-	case (strings.Contains(templateString, "{{ value") || strings.Contains(templateString, "{{value")):
-		unsupportedFunc = "value"
-	case (strings.Contains(templateString, "{{ strvalue") || strings.Contains(templateString, "{{strvalue")):
-		unsupportedFunc = "strvalue"
-	case (strings.Contains(templateString, "{{ safeHtml") || strings.Contains(templateString, "{{safeHtml")):
-		unsupportedFunc = "safeHtml"
-	case (strings.Contains(templateString, "{{ sortByLabel") || strings.Contains(templateString, "{{sortByLabel")):
-		unsupportedFunc = "sortByLabel"
-	default:
-		unsupportedFunc = ""
+	titleTemplate := template.NewTemplateExpander(context.Background(), templateString, "tmp", data, 0, nil, externalURL, nil)
+	result, err = titleTemplate.Expand()
+	if err != nil {
+		return "", fmt.Errorf("error in Template: %s", err)
 	}
-
-	if unsupportedFunc == "" {
-		titleTemplate := template.NewTemplateExpander(context.Background(), templateString, "tmp", data, 0, nil, externalURL, nil)
-		result, err = titleTemplate.Expand()
-		if err != nil {
-			return "", fmt.Errorf("error in Template: %s", err)
-		}
-		return result, err
-	} else {
-		return "", fmt.Errorf("error in Template: The bridge does not support the function %s", unsupportedFunc)
-	}
+	return result, err
 }
 
 type AlertValues struct {
