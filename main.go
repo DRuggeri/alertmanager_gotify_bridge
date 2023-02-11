@@ -214,7 +214,9 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 
 	appToken := r.URL.Query().Get("token")
 	if appToken != "" {
-		fmt.Printf("Gotify application token (%s) found in request URI - overriding default token: (%s)\n", appToken, *svr.gotifyToken)
+		if *svr.debug {
+			fmt.Printf("Gotify application token (%s) found in request URI - overriding default token: (%s)\n", appToken, *svr.gotifyToken)
+		}
 		token = appToken
 	} else {
 		if *svr.debug {
