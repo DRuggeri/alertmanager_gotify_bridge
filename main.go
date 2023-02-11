@@ -7,16 +7,13 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-	"math"
 	"net/http"
 	"net/url"
 	"os"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/dustin/go-humanize"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/common/version"
@@ -106,7 +103,6 @@ func (h *basicAuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.handler(w, r)
-	return
 }
 
 func (h *metricsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -117,7 +113,6 @@ func (h *metricsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	newHandler := promhttp.HandlerFor(registry, promhttp.HandlerOpts{})
 	newHandler = promhttp.InstrumentMetricHandler(registry, newHandler)
 	newHandler.ServeHTTP(w, r)
-	return
 }
 
 func basicAuthHandlerBuilder(parentHandler http.Handler) http.Handler {
@@ -462,57 +457,16 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Error(w, strings.Join(text, "\n"), respCode)
-	return
 }
 
 func renderTemplate(templateString string, data interface{}, externalURL *url.URL) (string, error) {
 	var result string
 	var err error
 
-	titleTemplate := template.NewTemplateExpander(context.Background(), templateString, "tmp", data, 0, nil, externalURL, nil)
-	result, err = titleTemplate.Expand()
+	tmpl := template.NewTemplateExpander(context.Background(), templateString, "tmp", data, 0, nil, externalURL, nil)
+	result, err = tmpl.Expand()
 	if err != nil {
 		return "", fmt.Errorf("error in Template: %s", err)
 	}
 	return result, err
-}
-
-type AlertValues struct {
-	Metric string
-	Labels map[string]string
-	Value  float64
-}
-
-func (a Alert) Values() []AlertValues {
-	listRegx := regexp.MustCompile("\\[ ?metric='(.*?)' ?labels=\\{(.*?)\\} ?value=(.*?) ?\\]")
-	list := listRegx.FindAllStringSubmatch(a.ValueString, -1)
-
-	var alertValues []AlertValues
-
-	for _, query := range list {
-		metric := query[1]
-		labelsString := query[2]
-		value, err := strconv.ParseFloat(query[3], 32)
-		if err != nil {
-			value = -1
-		}
-
-		labelRegx := regexp.MustCompile("([^=, ]+?)=([^=, ]+)")
-		labelsList := labelRegx.FindAllStringSubmatch(labelsString, -1)
-
-		labels := make(map[string]string)
-
-		for _, value := range labelsList {
-			labels[value[1]] = value[2]
-		}
-
-		alertValues = append(alertValues, AlertValues{Metric: metric, Labels: labels, Value: value})
-	}
-
-	return alertValues
-}
-
-func (a Alert) Humanize(in float64) string {
-	in = math.Round(in*100) / 100
-	return humanize.Ftoa(in)
 }
