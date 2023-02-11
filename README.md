@@ -59,8 +59,39 @@ Flags:
   --version                     Show application version.
 ```
 
+### Token Override
+By default, the bridge sends alerts to the initialized bridge Gotify token. This configuration allows all alerts from alertmanager to send to a single Gotify application based on the token.
+
+The bridge supports overriding the initialized bridge Gotify token through the request URL, which allows different receivers to send alerts to other applications in Gotify. The format is similar to a standard Gotify request except for the word `message` being replaced by `gotify_webhook`.
+
+CURL Example:
+```shell
+curl http://127.0.0.1:8080/gotify_webhook?token=GS46-fGs.gW-gE. -d '
+{ "alerts": [
+  {
+    "annotations": {
+      "description":"A description",
+      "summary":"A summary",
+      "priority":"critical"
+    },
+    "status": "firing",
+    "generatorURL": "http://foobar.com"
+  }
+]}
+'
+```
+YAML Example:
+```YAML
+receivers:
+- name: storage
+  webhook_configs:
+  - url: http://127.0.0.1:8080/gotify_webhook?token=GS46-fGs.gW-gE.
+    send_resolved: false
+```
+
 ### Templating
-The bridge now supports [Go templating](https://golang.org/pkg/text/template/), so you can customize the alert messages further with templates in the title and message annotations, that you can configure in the Grafana alertmanager section.  
+The bridge now supports [Go templating](https://golang.org/pkg/text/template/), so you can customize the alert messages further with templates in the title and message annotations, that you can configure in the Grafana alertmanager section.
+
 For example add following line to the title:  
 `{{if eq .Status "firing"}}🔥{{else}}✅{{end}}`  
 This differentiates firing from resolving alerts.  
@@ -91,6 +122,68 @@ All providers are back up
 {{end}}
 ```
 Now if the alert fires it would list the jobs that are down. Which information the `.Values` method contains can be inspected in the Grafana alertmanager when configuring an alert and clicking the `Preview Alert` button.
+
+### Template Functions
+The bridges Go templating supports several template functions. All template functions listed in the [Grafana template functions](https://grafana.com/docs/grafana/latest/alerting/fundamentals/annotation-label/template-functions/) are supported with the bridge, with usage examples.
+
+NOTE: The externalURL function will only return a result when the message is sent from Grafana. Messages initiated through alertmanager will not contain an externalURL.
+
+The bridge uses Prometheous's [template.go](https://github.com/prometheus/prometheus/blob/main/template/template.go) file for template functions. Some of the template functions in the [template.go](https://github.com/prometheus/prometheus/blob/main/template/template.go) are not supported in the bridge because of limitations. 
+
+The chart below lists some additional functions not found in the [Grafana template functions](https://grafana.com/docs/grafana/latest/alerting/fundamentals/annotation-label/template-functions/) documentation but can be called through the bridge.
+
+| Function Name   | Supported |
+| --------------- |:---------:|
+| query           | no        |
+| first           | no        |
+| label           | no        |
+| value           | no        |
+| strvalue        | no        |
+| safeHtml        | yes       |
+| sortByLabel     | no        |
+| stripPort       | yes       |
+| stripDomain     | yes       |
+| toTime          | yes       |
+| parseDuration   | yes       |
+
+Grafana Example:
+```go
+{{ reReplaceAll ".+\\|" " " .Labels.log }}
+```
+
+CURL Example1:
+```json
+curl http://127.0.0.1:8080/gotify_webhook -d '
+{ "alerts": [
+  {
+    "annotations": {
+      "description": "{{ match \"my+\" \"my|test\" }}",
+      "summary":"A summary",
+      "priority":"critical"
+    },
+    "status": "firing",
+    "generatorURL": "http://foobar.com"
+  }
+]}
+'
+```
+
+CURL Example2:
+```json
+curl http://127.0.0.1:8080/gotify_webhook -d '
+{ "alerts": [
+  {
+    "annotations": {
+      "description": "{{ reReplaceAll \"fir\" \" \" .Status }}",
+      "summary":"A summary",
+      "priority":"critical"
+    },
+    "status": "firing",
+    "generatorURL": "http://foobar.com"
+  }
+]}
+'
+```
 
 ## Metrics
 The bridge tracks telemetry data for metrics within the server as well as exposes gotify's health (obtained via the /health endpoint) as prometheus metrics. Therefore, the bridge can be scraped with Prometheus on /metrics to obtain these metrics.

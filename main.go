@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -13,13 +14,13 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"text/template"
 	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/common/version"
+	"github.com/prometheus/prometheus/template"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
 
@@ -48,6 +49,7 @@ type Alert struct {
 	GeneratorURL string
 	StartsAt     string
 	ValueString  string
+	ExternalURL  string
 }
 
 type GotifyNotification struct {
@@ -142,6 +144,7 @@ func main() {
 	metrics["alerts_failed"] = 0
 
 	gotifyToken := os.Getenv("GOTIFY_TOKEN")
+	gotifyToken = "1"
 	if gotifyToken == "" {
 		os.Stderr.WriteString("ERROR: The token for Gotify API must be set in the environment variable GOTIFY_TOKEN\n")
 		os.Exit(1)
@@ -202,10 +205,25 @@ func main() {
 
 func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 	var notification Notification
+	var token string
+	var externalURL *url.URL
 	text := []string{}
 	respCode := http.StatusOK
 
 	metrics["requests_received"]++
+
+	appToken := r.URL.Query().Get("token")
+	if appToken != "" {
+		if *svr.debug {
+			log.Printf("Gotify application token (%s) found in request URI - overriding default token: (%s)\n", appToken, *svr.gotifyToken)
+		}
+		token = appToken
+	} else {
+		if *svr.debug {
+			log.Printf("    request uri (%s) application token prefix (?token=) is missing - falling back to default (%s)\n", r.RequestURI, *svr.gotifyToken)
+		}
+		token = *svr.gotifyToken
+	}
 
 	/* Assume this will never fail */
 	b, _ := ioutil.ReadAll(r.Body)
@@ -255,6 +273,13 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 				log.Printf("    Alert %d", idx)
 			}
 
+			if alert.ExternalURL != "" {
+				externalURL, err = url.Parse(alert.ExternalURL)
+				if err != nil {
+					log.Printf("External URL Format Error: %s", err)
+				}
+			}
+
 			if *extendedDetails {
 				// set text to html
 				extrasContentType := make(map[string]string)
@@ -272,7 +297,7 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 			}
 
 			if val, ok := alert.Annotations[*svr.titleAnnotation]; ok {
-				templatedTitle, err := renderTemplate(val, alert)
+				templatedTitle, err := renderTemplate(val, alert, externalURL)
 				if err != nil {
 					proceed = false
 					text = []string{err.Error()}
@@ -308,7 +333,7 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 			}
 
 			if val, ok := alert.Annotations[*svr.messageAnnotation]; ok {
-				message, err = renderTemplate(val, alert)
+				message, err = renderTemplate(val, alert, externalURL)
 				if err != nil {
 					proceed = false
 					text = []string{err.Error()}
@@ -395,7 +420,7 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 				request.Header.Set("Content-Type", "application/json")
-				request.Header.Set("X-Gotify-Key", *svr.gotifyToken)
+				request.Header.Set("X-Gotify-Key", token)
 
 				resp, err := client.Do(request)
 				if err != nil {
@@ -440,19 +465,16 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 	return
 }
 
-func renderTemplate(templateString string, data interface{}) (string, error) {
-	titleTemplate, err := template.New("tmp").Parse(templateString)
+func renderTemplate(templateString string, data interface{}, externalURL *url.URL) (string, error) {
+	var result string
+	var err error
+
+	titleTemplate := template.NewTemplateExpander(context.Background(), templateString, "tmp", data, 0, nil, externalURL, nil)
+	result, err = titleTemplate.Expand()
 	if err != nil {
 		return "", fmt.Errorf("error in Template: %s", err)
 	}
-
-	var templatedTitle bytes.Buffer
-	err = titleTemplate.ExecuteTemplate(&templatedTitle, "tmp", data)
-	if err != nil {
-		return "", fmt.Errorf("error in Template: %s", err)
-	}
-
-	return templatedTitle.String(), nil
+	return result, err
 }
 
 type AlertValues struct {
