@@ -106,7 +106,6 @@ func (h *basicAuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.handler(w, r)
-	return
 }
 
 func (h *metricsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -117,7 +116,6 @@ func (h *metricsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	newHandler := promhttp.HandlerFor(registry, promhttp.HandlerOpts{})
 	newHandler = promhttp.InstrumentMetricHandler(registry, newHandler)
 	newHandler.ServeHTTP(w, r)
-	return
 }
 
 func basicAuthHandlerBuilder(parentHandler http.Handler) http.Handler {
@@ -462,7 +460,6 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Error(w, strings.Join(text, "\n"), respCode)
-	return
 }
 
 func renderTemplate(templateString string, data interface{}, externalURL *url.URL) (string, error) {
