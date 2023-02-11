@@ -62,7 +62,7 @@ Flags:
 ### Token Override
 By default, the bridge sends alerts to the initialized bridge Gotify token. This configuration allows all alerts from alertmanager to send to a single Gotify application based on the token.
 
-The bridge supports overriding the initialized bridge Gotify token through the request URL, which allows different receivers to send alerts to other applications in Gotify. The format is similar to a standard Gotify request except for the word `message` being replaced by `gotify_webhook`.
+The bridge supports overriding the initialized bridge Gotify token by setting the `token` query string parameter, which allows different receivers to send alerts to other applications in Gotify.
 
 CURL Example:
 ```shell
@@ -90,7 +90,7 @@ receivers:
 ```
 
 ### Templating
-The bridge now supports [Go templating](https://golang.org/pkg/text/template/), so you can customize the alert messages further with templates in the title and message annotations, that you can configure in the Grafana alertmanager section.
+The bridge now supports [Go templating](https://golang.org/pkg/text/template/) with [Prometheus-enhanced functions](https://prometheus.io/docs/prometheus/latest/configuration/template_reference/), so you can customize the alert messages further with templates in the title and message annotations.
 
 For example add following line to the title:  
 `{{if eq .Status "firing"}}🔥{{else}}✅{{end}}`  
@@ -128,9 +128,7 @@ The bridges Go templating supports several template functions. All template func
 
 NOTE: The externalURL function will only return a result when the message is sent from Grafana. Messages initiated through alertmanager will not contain an externalURL.
 
-The bridge uses Prometheous's [template.go](https://github.com/prometheus/prometheus/blob/main/template/template.go) file for template functions. Some of the template functions in the [template.go](https://github.com/prometheus/prometheus/blob/main/template/template.go) are not supported in the bridge because of limitations. 
-
-The chart below lists some additional functions not found in the [Grafana template functions](https://grafana.com/docs/grafana/latest/alerting/fundamentals/annotation-label/template-functions/) documentation but can be called through the bridge.
+The bridge uses Prometheous's [template functions](https://prometheus.io/docs/prometheus/latest/configuration/template_reference/). Some of the template functions in [template.go](https://github.com/prometheus/prometheus/blob/main/template/template.go) are not supported in the bridge because of limitations. The chart below lists the additional functions not found in the [Grafana template functions](https://grafana.com/docs/grafana/latest/alerting/fundamentals/annotation-label/template-functions/) documentation, but can be called through the bridge.
 
 | Function Name   | Supported |
 | --------------- |:---------:|
