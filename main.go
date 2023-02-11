@@ -49,6 +49,7 @@ type Alert struct {
 	GeneratorURL string
 	StartsAt     string
 	ValueString  string
+	ExternalURL  string
 }
 
 type GotifyNotification struct {
@@ -143,6 +144,7 @@ func main() {
 	metrics["alerts_failed"] = 0
 
 	gotifyToken := os.Getenv("GOTIFY_TOKEN")
+	gotifyToken = "1"
 	if gotifyToken == "" {
 		os.Stderr.WriteString("ERROR: The token for Gotify API must be set in the environment variable GOTIFY_TOKEN\n")
 		os.Exit(1)
@@ -204,25 +206,16 @@ func main() {
 func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 	var notification Notification
 	var token string
+	var externalURL *url.URL
 	text := []string{}
 	respCode := http.StatusOK
 
 	metrics["requests_received"]++
 
-	if strings.Contains(r.RequestURI, "/gotify_webhook?token=") {
-		splitToken := strings.Split(r.RequestURI, "/gotify_webhook?token=")
-		if len(splitToken) == 2 && splitToken[1] != "" {
-			appToken := splitToken[1]
-			if *svr.debug {
-				fmt.Printf("Gotify application token (%s) found in request URI - overriding default token: (%s)\n", appToken, *svr.gotifyToken)
-			}
-			token = appToken
-		} else {
-			if *svr.debug {
-				log.Printf("    request uri application token prefix (%s) is defined but missing the token - falling back to default (%s)\n", r.RequestURI, *svr.gotifyToken)
-			}
-			token = *svr.gotifyToken
-		}
+	appToken := r.URL.Query().Get("token")
+	if appToken != "" {
+		fmt.Printf("Gotify application token (%s) found in request URI - overriding default token: (%s)\n", appToken, *svr.gotifyToken)
+		token = appToken
 	} else {
 		if *svr.debug {
 			log.Printf("    request uri (%s) application token prefix (?token=) is missing - falling back to default (%s)\n", r.RequestURI, *svr.gotifyToken)
@@ -278,6 +271,13 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 				log.Printf("    Alert %d", idx)
 			}
 
+			if alert.ExternalURL != "" {
+				externalURL, err = url.Parse(alert.ExternalURL)
+				if err != nil {
+					fmt.Printf("External URL Format Error: %s", err)
+				}
+			}
+
 			if *extendedDetails {
 				// set text to html
 				extrasContentType := make(map[string]string)
@@ -295,7 +295,7 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 			}
 
 			if val, ok := alert.Annotations[*svr.titleAnnotation]; ok {
-				templatedTitle, err := renderTemplate(val, alert)
+				templatedTitle, err := renderTemplate(val, alert, externalURL)
 				if err != nil {
 					proceed = false
 					text = []string{err.Error()}
@@ -331,7 +331,7 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 			}
 
 			if val, ok := alert.Annotations[*svr.messageAnnotation]; ok {
-				message, err = renderTemplate(val, alert)
+				message, err = renderTemplate(val, alert, externalURL)
 				if err != nil {
 					proceed = false
 					text = []string{err.Error()}
@@ -463,7 +463,7 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 	return
 }
 
-func renderTemplate(templateString string, data interface{}) (string, error) {
+func renderTemplate(templateString string, data interface{}, externalURL *url.URL) (string, error) {
 	var result string
 	var err error
 	var unsupportedFunc string
@@ -482,26 +482,18 @@ func renderTemplate(templateString string, data interface{}) (string, error) {
 		unsupportedFunc = "strvalue"
 	case (strings.Contains(templateString, "{{ safeHtml") || strings.Contains(templateString, "{{safeHtml")):
 		unsupportedFunc = "safeHtml"
-	case (strings.Contains(templateString, "{{ graphLink") || strings.Contains(templateString, "{{graphLink")):
-		unsupportedFunc = "graphLink"
 	case (strings.Contains(templateString, "{{ sortByLabel") || strings.Contains(templateString, "{{sortByLabel")):
 		unsupportedFunc = "sortByLabel"
-	case (strings.Contains(templateString, "{{ pathPrefix") || strings.Contains(templateString, "{{pathPrefix")):
-		unsupportedFunc = "pathPrefix"
-	case (strings.Contains(templateString, "{{ externalURL") || strings.Contains(templateString, "{{externalURL")):
-		unsupportedFunc = "externalURL"
 	default:
 		unsupportedFunc = ""
 	}
 
 	if unsupportedFunc == "" {
-		titleTemplate := template.NewTemplateExpander(context.Background(), templateString, "tmp", data, 0, nil, nil, nil)
+		titleTemplate := template.NewTemplateExpander(context.Background(), templateString, "tmp", data, 0, nil, externalURL, nil)
 		result, err = titleTemplate.Expand()
 		if err != nil {
 			return "", fmt.Errorf("error in Template: %s", err)
 		}
-
-		result = strings.ReplaceAll(result, "<no value>", "[no value]")
 		return result, err
 	} else {
 		return "", fmt.Errorf("error in Template: The bridge does not support the function %s", unsupportedFunc)
