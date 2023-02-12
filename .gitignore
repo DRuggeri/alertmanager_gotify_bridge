@@ -3,3 +3,4 @@ scripts/github_api_token
 tmp/
 scripts/alertmanager*
 *.code-workspace
+dist/
