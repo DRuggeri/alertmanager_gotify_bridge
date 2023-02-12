@@ -144,7 +144,6 @@ func main() {
 	metrics["alerts_failed"] = 0
 
 	gotifyToken := os.Getenv("GOTIFY_TOKEN")
-	gotifyToken = "1"
 	if gotifyToken == "" {
 		os.Stderr.WriteString("ERROR: The token for Gotify API must be set in the environment variable GOTIFY_TOKEN\n")
 		os.Exit(1)
