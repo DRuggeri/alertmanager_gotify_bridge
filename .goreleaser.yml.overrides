@@ -1,0 +1,9 @@
+#Overrides that get applied to base files in
+# my https://github.com/DRuggeri/golang_cicdactions_example/ repo
+#These are processed by the spruce tool at:
+#  https://github.com/geofffranks/spruce/
+builds:
+- ignore:
+    - (( append ))
+    - goarch: arm
+      goos: windows
