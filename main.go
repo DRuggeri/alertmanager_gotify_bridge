@@ -11,16 +11,18 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
+	ut "text/template"
 	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/common/version"
-	"github.com/prometheus/prometheus/template"
+	pt "github.com/prometheus/prometheus/template"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
 
@@ -204,8 +206,14 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 	var notification Notification
 	var token string
 	var externalURL *url.URL
+	var tmpls *ut.Template
+	tmplMsgPath := ""
+	fileMatch := true
+	defaultTitle := true
+	defaultMsg := true
 	text := []string{}
 	respCode := http.StatusOK
+	tmplMsgPath = "./templates"
 
 	metrics["requests_received"]++
 
@@ -217,7 +225,7 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 		token = appToken
 	} else {
 		if *svr.debug {
-			log.Printf("    request uri (%s) application token prefix (?token=) is missing - falling back to default (%s)\n", r.RequestURI, *svr.gotifyToken)
+			log.Printf("    request uri (%s) application token prefix (?token=) is missing - Falling back to default (%s)\n", r.RequestURI, *svr.gotifyToken)
 		}
 		token = *svr.gotifyToken
 	}
@@ -252,6 +260,24 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, fmt.Sprintf("%s", err), http.StatusBadRequest)
 			metrics["requests_invalid"]++
 			return
+		}
+
+		// Loads user-defined templates.
+		tmpls, fileMatch, err = parseMsgTemplates(tmplMsgPath, token)
+		if err != nil {
+			if *svr.debug {
+				log.Printf("%s                      - Falling back to default alerting\n", err)
+			}
+		} else if !fileMatch {
+			if *svr.debug {
+				log.Println("Notice: User-defined templates are missing - Falling back to default alerting")
+			}
+		} else {
+			if *svr.debug {
+				log.Printf("Detected user-defined templates")
+			}
+			defaultTitle = false
+			defaultMsg = false
 		}
 
 		if *svr.debug {
@@ -293,73 +319,140 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 
-			if val, ok := alert.Annotations[*svr.titleAnnotation]; ok {
-				templatedTitle, err := renderTemplate(val, alert, externalURL)
-				if err != nil {
-					proceed = false
-					text = []string{err.Error()}
-					respCode = http.StatusBadRequest
-					if *svr.debug {
-						log.Println(err.Error())
-					}
-					if *svr.dispatchErrors {
-						proceed = true
-						title = "Alertmanager-Gotify-Bridge Error"
-						message = fmt.Sprintf("    Error: %s\n\nAlso check Alertmanager, maybe an alert was raised!\n\nIcomming request:\n%s", err.Error(), b)
-					}
-				} else {
-					title += templatedTitle
-				}
+			if !defaultTitle {
+				var userTmpl string
+				userTmpl, err = createMsgTemplate(alert, fmt.Sprintf("title=%s", appToken), tmpls)
 
-				if *svr.debug {
-					log.Printf("    title: %s\n", title)
-				}
-			} else {
-				proceed = false
-				errMsg := fmt.Sprintf("Missing annotation: %s", *svr.titleAnnotation)
-				text = []string{errMsg}
-				respCode = http.StatusBadRequest
-				if *svr.debug {
-					log.Println(errMsg)
-				}
-				if *svr.dispatchErrors {
-					proceed = true
-					title = "Alertmanager-Gotify-Bridge Error"
-					message = fmt.Sprintf("    Error: %s\n\nAlso check Alertmanager, maybe an alert was raised!\n\nIcomming request:\n%s", errMsg, b)
+				if err != nil {
+					if *svr.debug {
+						log.Printf("    %s                          - Falling back to default alerting\n", err)
+					}
+					defaultTitle = true
+				} else {
+					tmplTitle, err := renderTemplate(userTmpl, alert, externalURL)
+					if err != nil {
+						proceed = false
+						text = []string{err.Error()}
+						respCode = http.StatusBadRequest
+						if *svr.debug {
+							log.Println(err.Error())
+						}
+						if *svr.dispatchErrors {
+							proceed = true
+							title = "Alertmanager-Gotify-Bridge Error"
+							message = fmt.Sprintf("    Error: %s\n\nAlso check Alertmanager, maybe an alert was raised!\n\nIcomming request:\n%s", err.Error(), b)
+						}
+					} else {
+						title += tmplTitle
+					}
+
+					if *svr.debug {
+						log.Printf("    Template: user-defined, title: %s\n", title)
+					}
 				}
 			}
 
-			if val, ok := alert.Annotations[*svr.messageAnnotation]; ok {
-				message, err = renderTemplate(val, alert, externalURL)
-				if err != nil {
+			if defaultTitle {
+				if val, ok := alert.Annotations[*svr.titleAnnotation]; ok {
+					templatedTitle, err := renderTemplate(val, alert, externalURL)
+					if err != nil {
+						proceed = false
+						text = []string{err.Error()}
+						respCode = http.StatusBadRequest
+						if *svr.debug {
+							log.Println(err.Error())
+						}
+						if *svr.dispatchErrors {
+							proceed = true
+							title = "Alertmanager-Gotify-Bridge Error"
+							message = fmt.Sprintf("    Error: %s\n\nAlso check Alertmanager, maybe an alert was raised!\n\nIcomming request:\n%s", err.Error(), b)
+						}
+					} else {
+						title += templatedTitle
+					}
+
+					if *svr.debug {
+						log.Printf("    title: %s\n", title)
+					}
+				} else {
 					proceed = false
-					text = []string{err.Error()}
+					errMsg := fmt.Sprintf("Missing annotation: %s", *svr.titleAnnotation)
+					text = []string{errMsg}
 					respCode = http.StatusBadRequest
 					if *svr.debug {
-						log.Println(err.Error())
+						log.Println(errMsg)
 					}
 					if *svr.dispatchErrors {
 						proceed = true
 						title = "Alertmanager-Gotify-Bridge Error"
-						message = fmt.Sprintf("    Error: %s\n\nAlso check Alertmanager, maybe an alert was raised!\n\nIcomming request:\n%s", err.Error(), b)
+						message = fmt.Sprintf("    Error: %s\n\nAlso check Alertmanager, maybe an alert was raised!\n\nIcomming request:\n%s", errMsg, b)
 					}
 				}
+			}
 
-				if *svr.debug {
-					log.Printf("    message: %s\n", message)
+			if !defaultMsg {
+				var userTmpl string
+				userTmpl, err = createMsgTemplate(alert, appToken, tmpls)
+				if err != nil {
+					if *svr.debug {
+						log.Printf("    %s                          - Falling back to default alerting\n", err)
+					}
+					defaultMsg = true
+				} else {
+					message, err = renderTemplate(userTmpl, alert, externalURL)
+					if err != nil {
+						proceed = false
+						text = []string{err.Error()}
+						respCode = http.StatusBadRequest
+						if *svr.debug {
+							log.Println(err.Error())
+						}
+						if *svr.dispatchErrors {
+							proceed = true
+							title = "Alertmanager-Gotify-Bridge Error"
+							message = fmt.Sprintf("    Error: %s\n\nAlso check Alertmanager, maybe an alert was raised!\n\nIcomming request:\n%s", err.Error(), b)
+						}
+					}
+
+					if *svr.debug {
+						log.Printf("    Template: user-defined, message: %s\n", message)
+					}
 				}
-			} else {
-				proceed = false
-				errMsg := fmt.Sprintf("Missing annotation: %s", *svr.messageAnnotation)
-				text = []string{errMsg}
-				respCode = http.StatusBadRequest
-				if *svr.debug {
-					log.Println(errMsg)
-				}
-				if *svr.dispatchErrors {
-					proceed = true
-					title = "Alertmanager-Gotify-Bridge Error"
-					message = fmt.Sprintf("    Error: %s\n\nAlso check Alertmanager, maybe an alert was raised!\n\nIcomming request:\n%s", errMsg, b)
+			}
+
+			if defaultMsg {
+				if val, ok := alert.Annotations[*svr.messageAnnotation]; ok {
+					message, err = renderTemplate(val, alert, externalURL)
+					if err != nil {
+						proceed = false
+						text = []string{err.Error()}
+						respCode = http.StatusBadRequest
+						if *svr.debug {
+							log.Println(err.Error())
+						}
+						if *svr.dispatchErrors {
+							proceed = true
+							title = "Alertmanager-Gotify-Bridge Error"
+							message = fmt.Sprintf("    Error: %s\n\nAlso check Alertmanager, maybe an alert was raised!\n\nIcomming request:\n%s", err.Error(), b)
+						}
+					}
+
+					if *svr.debug {
+						log.Printf("    message: %s\n", message)
+					}
+				} else {
+					proceed = false
+					errMsg := fmt.Sprintf("Missing annotation: %s", *svr.messageAnnotation)
+					text = []string{errMsg}
+					respCode = http.StatusBadRequest
+					if *svr.debug {
+						log.Println(errMsg)
+					}
+					if *svr.dispatchErrors {
+						proceed = true
+						title = "Alertmanager-Gotify-Bridge Error"
+						message = fmt.Sprintf("    Error: %s\n\nAlso check Alertmanager, maybe an alert was raised!\n\nIcomming request:\n%s", errMsg, b)
+					}
 				}
 			}
 
@@ -373,7 +466,7 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 				}
 			} else {
 				if *svr.debug {
-					log.Printf("    priority annotation (%s) missing - falling back to default (%d)\n", *svr.priorityAnnotation, *svr.defaultPriority)
+					log.Printf("    priority annotation (%s) missing - Falling back to default (%d)\n", *svr.priorityAnnotation, *svr.defaultPriority)
 				}
 			}
 
@@ -461,11 +554,87 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, strings.Join(text, "\n"), respCode)
 }
 
+func parseMsgTemplates(tmplPath string, token string) (*ut.Template, bool, error) {
+	var tmpl *ut.Template
+	var dirs []string
+	var tmplNames []string
+	var fileMatch bool = false
+
+	err := filepath.Walk(tmplPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return fmt.Errorf("File or Folder discovery issue: %s", err)
+		}
+		if !info.IsDir() {
+			filename := info.Name()
+			dupFileNames := contains(tmplNames, filename)
+			if dupFileNames {
+				return fmt.Errorf("Repeated user-defined template file names are not allowed: %s", filename)
+			}
+			tmplNames = append(tmplNames, filename)
+		} else {
+			dirs = append(dirs, path)
+		}
+		return nil
+	})
+	if err != nil {
+		return tmpl, fileMatch, fmt.Errorf("Error: A user-defined template discovery contains errors: %s\n", err)
+	}
+
+	fileExt := []string{"html", "gohtml", "gotmpl", "tmpl"}
+	for _, p := range fileExt {
+		matchedTmpls, err := ut.ParseGlob(tmplPath + "/*." + p)
+		if err == nil {
+			tmpl = ut.Must(matchedTmpls, err)
+
+			for _, path := range dirs[1:] {
+				pattern := path + "/*." + p
+				matchedTmpls, err := tmpl.ParseGlob(pattern)
+				if err == nil {
+					ut.Must(matchedTmpls, err)
+					// Catches all errors besides pattern matching.
+				} else if !strings.Contains(err.Error(), "pattern matches no files") {
+					return tmpl, fileMatch, fmt.Errorf("Error: A user-defined template contains errors: %s\n"+
+						"                      - All templates with the file extension (.%s) will not function until the errors are corrected\n", err, p)
+				}
+			}
+			fileMatch = true
+			// Catches all errors besides pattern matching.
+		} else if !strings.Contains(err.Error(), "pattern matches no files") {
+			return tmpl, fileMatch, fmt.Errorf("Error: A user-defined template contains errors: %s\n"+
+				"                      - All templates with the file extension (.%s) will not function until the errors are corrected\n", err, p)
+		}
+	}
+	return tmpl, fileMatch, nil
+}
+
+func contains(tmplNames []string, filename string) bool {
+	for _, f := range tmplNames {
+		if f == filename {
+			return true
+		}
+	}
+	return false
+}
+
+func createMsgTemplate(alert Alert, token string, tmpls *ut.Template) (string, error) {
+	buf := &bytes.Buffer{}
+	err := tmpls.ExecuteTemplate(buf, token, alert)
+	if err != nil {
+		if strings.Contains(err.Error(), "no template") {
+			return "", fmt.Errorf("Notice: Templates found, but no templates found associated with the token (%s)\n"+
+				"                          - If templates are configured, please check the logs for template errors\n", token)
+		} else {
+			return "", fmt.Errorf("Error: %s", err)
+		}
+	}
+	return buf.String(), err
+}
+
 func renderTemplate(templateString string, data interface{}, externalURL *url.URL) (string, error) {
 	var result string
 	var err error
 
-	titleTemplate := template.NewTemplateExpander(context.Background(), templateString, "tmp", data, 0, nil, externalURL, nil)
+	titleTemplate := pt.NewTemplateExpander(context.Background(), templateString, "tmp", data, 0, nil, externalURL, nil)
 	result, err = titleTemplate.Expand()
 	if err != nil {
 		return "", fmt.Errorf("error in Template: %s", err)

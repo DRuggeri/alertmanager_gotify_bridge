@@ -90,7 +90,7 @@ receivers:
 ```
 
 ### Templating
-The bridge now supports [Go templating](https://golang.org/pkg/text/template/) with [Prometheus-enhanced functions](https://prometheus.io/docs/prometheus/latest/configuration/template_reference/), so you can customize the alert messages further with templates in the title and message annotations.
+The supports [Go templating](https://golang.org/pkg/text/template/) with [Prometheus-enhanced functions](https://prometheus.io/docs/prometheus/latest/configuration/template_reference/), so you can customize the alert messages further with templates in the title and message annotations.
 
 For example add following line to the title:  
 `{{if eq .Status "firing"}}🔥{{else}}✅{{end}}`  
@@ -182,6 +182,100 @@ curl http://127.0.0.1:8080/gotify_webhook -d '
 ]}
 '
 ```
+### Bridge Message Templating
+The bridge now supports user-defined templating for all inbound messages. The user-defined templating can be used for the title and/or message. Also, user-defined templating overrides the default title and message annotations. All keys and values in the JSON from alertmanager can be used in the user-defined template. Any failures in the templates will result in the bridge defaulting back to default alerting.
+
+#### Usage Notes:
+- For Docker, you must bind your volume to your host to add user-defined templating.
+- The default directory for all templates is the root of the bridge in the folder called `templates`.
+- User-defined templating allows matching and linking using the "define" name of the template [Go Templating](https://golang.google.cn/pkg/text/template/).
+- The Gotify software token is used for matching a message template.
+- The Gotify software token with `title=` at the beginning is used for matching a title template.
+- All file names must be unique but can be any name or subfolder naming you choose.
+- Only one Gotify software token should be defined. More than one will result in inconsistent alerting results.
+- The bridge supports the following template file extensions: "html", "gohtml", "gotmpl", and "tmpl".
+- Add `-` to prevent extra blank lines. Example: `{{- .Status }}`
+
+#### Usage Hints:
+- When different alert senders/JSON files are sent to the same Gotify software token, we recommend using a minimum of two different user-defined templates to handle the message. For example, `message_template.tmpl` and `message_sub-template1.tmpl`. The `message_template.tmpl` would contain the defined Gotify software token with comparison operators on the JSON values to direct the message to a user-defined sender template. Multiple sub-templates can link to the `message_template.tmpl`. Following this process can limit unexpected execution failures, that result in the alert defaulting back to the default alert.
+- Additional folders are supported within the `templates` directory for organization purposes.
+- When referencing a key in a JSON that does not exist, the template will fail. The trick is to use the `message_template.tmpl` to direct the message to another template that contains all the required keys. As long as no match occurs in the `message_template.tmpl` to another sub-template that has non-matching keys, everything will continue to alert by design. 
+
+#### Usage Example:
+This example will show the creation of five different user-defined templates for more advanced match routing within the bridge. The example below will display a message being received and how to create a custom template based on that message.
+
+JSON Discover Hint: Enable debugging on the bridge to see the JSON output sent from the sender to add additional values to your template.
+
+1. Write down the Gotify software token used in the alert message.
+    ```text
+    GS46-fGs.gW-gE.
+    ```
+2. Find the incoming JSON for the user-defined alert.
+    ```JSON
+    { "alerts": [
+      {
+        "annotations": {
+          "description": "{{ humanize 1234567.0 }}",
+          "summary":"A summary",
+          "priority":"critical"
+        },
+        "status": "firing",
+        "generatorURL": "http://foobar.com",
+      }
+    ]}
+    ```
+3. Create a file in the ./templates folder called `app_message_template.tmpl`.
+4. Past the following into the file from step 3.
+    ```go
+    {{ define "GS46-fGs.gW-gE." }}
+    {{ if eq (.Status) ("firing") }} {{ template "my_app1" .}} {{end}}
+    {{ if eq (.Annotations.summary) ("A summary") }} {{ template "my_app2" .}} {{end}}
+    {{ if eq (.GeneratorURL) ("http://foobar.com") }} {{ template "my_app3" .}} {{else}}Testing Message: None Found {{end}}
+    {{end}}
+    ```
+4. Create a file in the ./templates folder called `app1_message_sub-template.tmpl`.
+5. Past the following into the file from step 4.
+    ```go
+    {{ define "my_app1" }}
+    {{ if eq (.Status) ("firing") }}App1 Firing {{else}}App1 Not Firing {{end}}
+    {{end}}
+    ```
+6. Create a file in the ./templates folder called `app2_message_sub-template.tmpl`.
+7. Past the following into the file from step 5.
+    ```go
+    {{ define "my_app2" }}
+    {{ if eq (.Status) ("firing") }}App2 Firing {{else}}App2 Not Firing {{end}}
+    {{end}}
+    ```
+8. Create a file in the ./templates folder called `app3_message_sub-template.tmpl`.
+9. Past the following into the file from step 8.
+    ```go
+    {{ define "my_app3" }}
+    {{ if eq (.Status) ("firing") }}App3 Firing {{else}}App3 Not Firing {{end}}
+    {{end}}
+    ```
+10. Create a file in the ./templates folder called `app_title_template.tmpl`.
+9. Past the following into the file from step 8.
+    ```go
+    {{ define "title=AFRy-fWs.jW-gE." }}
+    {{ if eq (.Status) ("firing") }}Title Sample {{else}}Nope {{end}}
+    {{end}}
+    ```
+12. Send the alert to the bridge, and the result will be listed below in text format.
+    - Note: This example is a simple example using the same incoming JSON, but this can support different JSON being sent through the same token, but shows you can get creative with your templates.
+    Result:
+    ```text
+    Title Sample
+
+
+    App1 Firing 
+    
+    
+    App2 Firing 
+    
+    
+    App3 Firing 
+    ```
 
 ## Metrics
 The bridge tracks telemetry data for metrics within the server as well as exposes gotify's health (obtained via the /health endpoint) as prometheus metrics. Therefore, the bridge can be scraped with Prometheus on /metrics to obtain these metrics.
