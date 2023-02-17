@@ -208,7 +208,6 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 	var externalURL *url.URL
 	var tmpls *ut.Template
 	tmplMsgPath := ""
-	fileMatch := true
 	defaultTitle := true
 	defaultMsg := true
 	text := []string{}
@@ -263,12 +262,12 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Loads user-defined templates.
-		tmpls, fileMatch, err = parseMsgTemplates(tmplMsgPath, token)
+		tmpls, err = parseMsgTemplates(tmplMsgPath, token)
 		if err != nil {
 			if *svr.debug {
 				log.Printf("%s                      - Falling back to default alerting\n", err)
 			}
-		} else if !fileMatch {
+		} else if tmpls == nil {
 			if *svr.debug {
 				log.Println("Notice: User-defined templates are missing - Falling back to default alerting")
 			}
@@ -321,7 +320,7 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 
 			if !defaultTitle {
 				var userTmpl string
-				userTmpl, err = createMsgTemplate(alert, fmt.Sprintf("title=%s", appToken), tmpls)
+				userTmpl, err = createUserTemplate(alert, fmt.Sprintf("title=%s", appToken), tmpls)
 
 				if err != nil {
 					if *svr.debug {
@@ -392,7 +391,7 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 
 			if !defaultMsg {
 				var userTmpl string
-				userTmpl, err = createMsgTemplate(alert, appToken, tmpls)
+				userTmpl, err = createUserTemplate(alert, appToken, tmpls)
 				if err != nil {
 					if *svr.debug {
 						log.Printf("    %s                          - Falling back to default alerting\n", err)
@@ -554,11 +553,10 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, strings.Join(text, "\n"), respCode)
 }
 
-func parseMsgTemplates(tmplPath string, token string) (*ut.Template, bool, error) {
+func parseMsgTemplates(tmplPath string, token string) (*ut.Template, error) {
 	var tmpl *ut.Template
 	var dirs []string
 	var tmplNames []string
-	var fileMatch bool = false
 
 	err := filepath.Walk(tmplPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -577,7 +575,7 @@ func parseMsgTemplates(tmplPath string, token string) (*ut.Template, bool, error
 		return nil
 	})
 	if err != nil {
-		return tmpl, fileMatch, fmt.Errorf("Error: A user-defined template discovery contains errors: %s\n", err)
+		return tmpl, fmt.Errorf("Error: A user-defined template discovery contains errors: %s\n", err)
 	}
 
 	fileExt := []string{"html", "gohtml", "gotmpl", "tmpl"}
@@ -593,18 +591,17 @@ func parseMsgTemplates(tmplPath string, token string) (*ut.Template, bool, error
 					ut.Must(matchedTmpls, err)
 					// Catches all errors besides pattern matching.
 				} else if !strings.Contains(err.Error(), "pattern matches no files") {
-					return tmpl, fileMatch, fmt.Errorf("Error: A user-defined template contains errors: %s\n"+
+					return tmpl, fmt.Errorf("Error: A user-defined template contains errors: %s\n"+
 						"                      - All templates with the file extension (.%s) will not function until the errors are corrected\n", err, p)
 				}
 			}
-			fileMatch = true
 			// Catches all errors besides pattern matching.
 		} else if !strings.Contains(err.Error(), "pattern matches no files") {
-			return tmpl, fileMatch, fmt.Errorf("Error: A user-defined template contains errors: %s\n"+
+			return tmpl, fmt.Errorf("Error: A user-defined template contains errors: %s\n"+
 				"                      - All templates with the file extension (.%s) will not function until the errors are corrected\n", err, p)
 		}
 	}
-	return tmpl, fileMatch, nil
+	return tmpl, nil
 }
 
 func contains(tmplNames []string, filename string) bool {
@@ -616,7 +613,7 @@ func contains(tmplNames []string, filename string) bool {
 	return false
 }
 
-func createMsgTemplate(alert Alert, token string, tmpls *ut.Template) (string, error) {
+func createUserTemplate(alert Alert, token string, tmpls *ut.Template) (string, error) {
 	buf := &bytes.Buffer{}
 	err := tmpls.ExecuteTemplate(buf, token, alert)
 	if err != nil {
@@ -624,7 +621,7 @@ func createMsgTemplate(alert Alert, token string, tmpls *ut.Template) (string, e
 			return "", fmt.Errorf("Notice: Templates found, but no templates found associated with the token (%s)\n"+
 				"                          - If templates are configured, please check the logs for template errors\n", token)
 		} else {
-			return "", fmt.Errorf("Error: %s", err)
+			return "", fmt.Errorf("Error: %s\n", err)
 		}
 	}
 	return buf.String(), err
