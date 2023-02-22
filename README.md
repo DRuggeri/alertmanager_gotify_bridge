@@ -193,7 +193,7 @@ The bridge now supports user-defined templating for all inbound messages. The us
 - The Gotify software token with `title=` at the beginning is used for matching a title template.
 - All file names must be unique but can be any name or subfolder naming you choose.
 - Only one Gotify software token should be defined. More than one will result in inconsistent alerting results.
-- The bridge supports the following template file extensions: "html", "gohtml", "gotmpl", and "tmpl".
+- The bridge supports the following template file extensions: "gohtml", "gotmpl", and "tmpl".
 - Add `-` to prevent extra blank lines. Example: `{{- .Status }}`
 
 #### Usage Hints:

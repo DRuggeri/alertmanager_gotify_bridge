@@ -39,6 +39,7 @@ type bridge struct {
 	gotifyToken        *string
 	gotifyEndpoint     *string
 	dispatchErrors     *bool
+	userTemplates      *ut.Template
 }
 
 type Notification struct {
@@ -133,6 +134,8 @@ func basicAuthHandlerBuilder(parentHandler http.Handler) http.Handler {
 }
 
 func main() {
+	var tmplMsgPath string = "./templates"
+	var userTemplates *ut.Template
 	kingpin.Version(Version)
 	kingpin.Parse()
 
@@ -172,6 +175,12 @@ func main() {
 		serverType = "debug "
 	}
 
+	// Loads user-defined templates
+	userTemplates, err = parseUserTemplates(tmplMsgPath)
+	if err != nil {
+		fmt.Printf("%s       - Falling back to default alerting\n", err)
+	}
+
 	fmt.Printf("Starting %sserver on http://%s:%d%s translating to %s ...\n", serverType, *address, *port, *webhookPath, *gotifyEndpoint)
 	svr := &bridge{
 		debug:              debug,
@@ -183,6 +192,7 @@ func main() {
 		gotifyToken:        &gotifyToken,
 		gotifyEndpoint:     gotifyEndpoint,
 		dispatchErrors:     dispatchErrors,
+		userTemplates:      userTemplates,
 	}
 
 	serverMux := http.NewServeMux()
@@ -206,13 +216,10 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 	var notification Notification
 	var token string
 	var externalURL *url.URL
-	var tmpls *ut.Template
-	tmplMsgPath := ""
-	defaultTitle := true
-	defaultMsg := true
+	var defaultTitle bool
+	var defaultMsg bool
 	text := []string{}
 	respCode := http.StatusOK
-	tmplMsgPath = "./templates"
 
 	metrics["requests_received"]++
 
@@ -261,24 +268,6 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Loads user-defined templates.
-		tmpls, err = parseMsgTemplates(tmplMsgPath, token)
-		if err != nil {
-			if *svr.debug {
-				log.Printf("%s                      - Falling back to default alerting\n", err)
-			}
-		} else if tmpls == nil {
-			if *svr.debug {
-				log.Println("Notice: User-defined templates are missing - Falling back to default alerting")
-			}
-		} else {
-			if *svr.debug {
-				log.Printf("Detected user-defined templates")
-			}
-			defaultTitle = false
-			defaultMsg = false
-		}
-
 		if *svr.debug {
 			log.Printf("Detected %d alerts\n", len(notification.Alerts))
 		}
@@ -289,6 +278,7 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 			title := ""
 			message := ""
 			priority := *svr.defaultPriority
+			tmpls := svr.userTemplates
 
 			metrics["alerts_received"]++
 			if *svr.debug {
@@ -318,17 +308,20 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 
-			if !defaultTitle {
-				var userTmpl string
-				userTmpl, err = createUserTemplate(alert, fmt.Sprintf("title=%s", appToken), tmpls)
+			// Checks if user defined templates exist
+			if tmpls != nil {
+				var userTitleTmpl string
+				var userMsgTmpl string
 
+				// Executes a user title template if one exists
+				userTitleTmpl, err = executeUserTemplate(alert, fmt.Sprintf("title=%s", appToken), tmpls)
 				if err != nil {
 					if *svr.debug {
 						log.Printf("    %s                          - Falling back to default alerting\n", err)
 					}
 					defaultTitle = true
 				} else {
-					tmplTitle, err := renderTemplate(userTmpl, alert, externalURL)
+					tmplTitle, err := renderTemplate(userTitleTmpl, alert, externalURL)
 					if err != nil {
 						proceed = false
 						text = []string{err.Error()}
@@ -343,12 +336,46 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 						}
 					} else {
 						title += tmplTitle
+						defaultTitle = false
 					}
 
 					if *svr.debug {
 						log.Printf("    Template: user-defined, title: %s\n", title)
 					}
 				}
+
+				// Executes a user message template if one exists
+				userMsgTmpl, err = executeUserTemplate(alert, appToken, tmpls)
+				if err != nil {
+					if *svr.debug {
+						log.Printf("    %s                          - Falling back to default alerting\n", err)
+					}
+					defaultMsg = true
+				} else {
+					message, err = renderTemplate(userMsgTmpl, alert, externalURL)
+					if err != nil {
+						proceed = false
+						text = []string{err.Error()}
+						respCode = http.StatusBadRequest
+						if *svr.debug {
+							log.Println(err.Error())
+						}
+						if *svr.dispatchErrors {
+							proceed = true
+							title = "Alertmanager-Gotify-Bridge Error"
+							message = fmt.Sprintf("    Error: %s\n\nAlso check Alertmanager, maybe an alert was raised!\n\nIcomming request:\n%s", err.Error(), b)
+						}
+					} else {
+						defaultMsg = false
+					}
+
+					if *svr.debug {
+						log.Printf("    Template: user-defined, message: %s\n", message)
+					}
+				}
+			} else {
+				defaultTitle = true
+				defaultMsg = true
 			}
 
 			if defaultTitle {
@@ -385,36 +412,6 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 						proceed = true
 						title = "Alertmanager-Gotify-Bridge Error"
 						message = fmt.Sprintf("    Error: %s\n\nAlso check Alertmanager, maybe an alert was raised!\n\nIcomming request:\n%s", errMsg, b)
-					}
-				}
-			}
-
-			if !defaultMsg {
-				var userTmpl string
-				userTmpl, err = createUserTemplate(alert, appToken, tmpls)
-				if err != nil {
-					if *svr.debug {
-						log.Printf("    %s                          - Falling back to default alerting\n", err)
-					}
-					defaultMsg = true
-				} else {
-					message, err = renderTemplate(userTmpl, alert, externalURL)
-					if err != nil {
-						proceed = false
-						text = []string{err.Error()}
-						respCode = http.StatusBadRequest
-						if *svr.debug {
-							log.Println(err.Error())
-						}
-						if *svr.dispatchErrors {
-							proceed = true
-							title = "Alertmanager-Gotify-Bridge Error"
-							message = fmt.Sprintf("    Error: %s\n\nAlso check Alertmanager, maybe an alert was raised!\n\nIcomming request:\n%s", err.Error(), b)
-						}
-					}
-
-					if *svr.debug {
-						log.Printf("    Template: user-defined, message: %s\n", message)
 					}
 				}
 			}
@@ -553,7 +550,7 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, strings.Join(text, "\n"), respCode)
 }
 
-func parseMsgTemplates(tmplPath string, token string) (*ut.Template, error) {
+func parseUserTemplates(tmplPath string) (*ut.Template, error) {
 	var tmpl *ut.Template
 	var dirs []string
 	var tmplNames []string
@@ -575,10 +572,10 @@ func parseMsgTemplates(tmplPath string, token string) (*ut.Template, error) {
 		return nil
 	})
 	if err != nil {
-		return tmpl, fmt.Errorf("Error: A user-defined template discovery contains errors: %s\n", err)
+		return tmpl, fmt.Errorf("Error: A user-defined template discovery has an error: %s\n", err)
 	}
 
-	fileExt := []string{"html", "gohtml", "gotmpl", "tmpl"}
+	fileExt := []string{"gohtml", "gotmpl", "tmpl"}
 	for _, p := range fileExt {
 		matchedTmpls, err := ut.ParseGlob(tmplPath + "/*." + p)
 		if err == nil {
@@ -591,14 +588,14 @@ func parseMsgTemplates(tmplPath string, token string) (*ut.Template, error) {
 					ut.Must(matchedTmpls, err)
 					// Catches all errors besides pattern matching.
 				} else if !strings.Contains(err.Error(), "pattern matches no files") {
-					return tmpl, fmt.Errorf("Error: A user-defined template contains errors: %s\n"+
-						"                      - All templates with the file extension (.%s) will not function until the errors are corrected\n", err, p)
+					return tmpl, fmt.Errorf("Error: A user-defined template has an error: %s\n"+
+						"       - All templates with the file extension (.%s) will not function until the error is corrected\n", err, p)
 				}
 			}
 			// Catches all errors besides pattern matching.
 		} else if !strings.Contains(err.Error(), "pattern matches no files") {
-			return tmpl, fmt.Errorf("Error: A user-defined template contains errors: %s\n"+
-				"                      - All templates with the file extension (.%s) will not function until the errors are corrected\n", err, p)
+			return tmpl, fmt.Errorf("Error: A user-defined template has an error: %s\n"+
+				"       - All templates with the file extension (.%s) will not function until the error is corrected\n", err, p)
 		}
 	}
 	return tmpl, nil
@@ -613,7 +610,7 @@ func contains(tmplNames []string, filename string) bool {
 	return false
 }
 
-func createUserTemplate(alert Alert, token string, tmpls *ut.Template) (string, error) {
+func executeUserTemplate(alert Alert, token string, tmpls *ut.Template) (string, error) {
 	buf := &bytes.Buffer{}
 	err := tmpls.ExecuteTemplate(buf, token, alert)
 	if err != nil {
