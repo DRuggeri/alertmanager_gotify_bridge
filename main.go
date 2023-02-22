@@ -321,6 +321,7 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 					}
 					defaultTitle = true
 				} else {
+					defaultTitle = false
 					tmplTitle, err := renderTemplate(userTitleTmpl, alert, externalURL)
 					if err != nil {
 						proceed = false
@@ -336,7 +337,6 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 						}
 					} else {
 						title += tmplTitle
-						defaultTitle = false
 					}
 
 					if *svr.debug {
@@ -352,6 +352,7 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 					}
 					defaultMsg = true
 				} else {
+					defaultMsg = false
 					message, err = renderTemplate(userMsgTmpl, alert, externalURL)
 					if err != nil {
 						proceed = false
@@ -365,8 +366,6 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 							title = "Alertmanager-Gotify-Bridge Error"
 							message = fmt.Sprintf("    Error: %s\n\nAlso check Alertmanager, maybe an alert was raised!\n\nIcomming request:\n%s", err.Error(), b)
 						}
-					} else {
-						defaultMsg = false
 					}
 
 					if *svr.debug {
