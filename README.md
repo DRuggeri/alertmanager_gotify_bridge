@@ -190,7 +190,7 @@ The bridge now supports user-defined templating for all inbound messages. The us
 - The default directory for all templates is the root of the bridge in the folder called `templates`.
 - User-defined templating allows matching and linking using the "define" name of the template [Go Templating](https://golang.google.cn/pkg/text/template/).
 - The Gotify software token is used for matching a message template.
-- The Gotify software token with `title=` at the beginning is used for matching a title template.
+- If a template is defined as title=TOKEN, it will be used to render the title of the alert..
 - All file names must be unique but can be any name or subfolder naming you choose.
 - Only one Gotify software token should be defined. More than one will result in inconsistent alerting results.
 - The bridge supports the following template file extensions: "gohtml", "gotmpl", and "tmpl".
