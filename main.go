@@ -166,7 +166,7 @@ func main() {
 
 	_, err := url.ParseRequestURI(*gotifyEndpoint)
 	if err != nil {
-		fmt.Printf("Error - invalid gotify endpoint: %s\n", err)
+		log.Printf("Error - invalid gotify endpoint: %s\n", err)
 		os.Exit(1)
 	}
 
@@ -178,10 +178,10 @@ func main() {
 	// Loads user-defined templates
 	userTemplates, err = parseUserTemplates(tmplMsgPath)
 	if err != nil {
-		fmt.Printf("%s       - Falling back to default alerting\n", err)
+		log.Printf("%s       - Falling back to default alerting\n", err)
 	}
 
-	fmt.Printf("Starting %sserver on http://%s:%d%s translating to %s ...\n", serverType, *address, *port, *webhookPath, *gotifyEndpoint)
+	log.Printf("Starting %sserver on http://%s:%d%s translating to %s ...\n", serverType, *address, *port, *webhookPath, *gotifyEndpoint)
 	svr := &bridge{
 		debug:              debug,
 		timeout:            timeout,
@@ -207,7 +207,7 @@ func main() {
 
 	err = server.ListenAndServe()
 	if nil != err {
-		fmt.Printf("Error starting the server: %s", err)
+		log.Printf("Error starting the server: %s", err)
 		os.Exit(1)
 	}
 }
