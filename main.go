@@ -166,7 +166,7 @@ func main() {
 
 	_, err := url.ParseRequestURI(*gotifyEndpoint)
 	if err != nil {
-		fmt.Printf("Error - invalid gotify endpoint: %s\n", err)
+		log.Printf("Error - invalid gotify endpoint: %s\n", err)
 		os.Exit(1)
 	}
 
@@ -178,10 +178,10 @@ func main() {
 	// Loads user-defined templates
 	userTemplates, err = parseUserTemplates(tmplMsgPath)
 	if err != nil {
-		fmt.Printf("%s       - Falling back to default alerting\n", err)
+		log.Printf("%s       - Falling back to default alerting\n", err)
 	}
 
-	fmt.Printf("Starting %sserver on http://%s:%d%s translating to %s ...\n", serverType, *address, *port, *webhookPath, *gotifyEndpoint)
+	log.Printf("Starting %sserver on http://%s:%d%s translating to %s ...\n", serverType, *address, *port, *webhookPath, *gotifyEndpoint)
 	svr := &bridge{
 		debug:              debug,
 		timeout:            timeout,
@@ -207,7 +207,7 @@ func main() {
 
 	err = server.ListenAndServe()
 	if nil != err {
-		fmt.Printf("Error starting the server: %s", err)
+		log.Printf("Error starting the server: %s", err)
 		os.Exit(1)
 	}
 }
@@ -556,13 +556,13 @@ func parseUserTemplates(tmplPath string) (*ut.Template, error) {
 
 	err := filepath.Walk(tmplPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			return fmt.Errorf("File or Folder discovery issue: %s", err)
+			return fmt.Errorf("file or Folder discovery issue: %s", err)
 		}
 		if !info.IsDir() {
 			filename := info.Name()
 			dupFileNames := contains(tmplNames, filename)
 			if dupFileNames {
-				return fmt.Errorf("Repeated user-defined template file names are not allowed: %s", filename)
+				return fmt.Errorf("repeated user-defined template file names are not allowed: %s", filename)
 			}
 			tmplNames = append(tmplNames, filename)
 		} else {
@@ -571,7 +571,7 @@ func parseUserTemplates(tmplPath string) (*ut.Template, error) {
 		return nil
 	})
 	if err != nil {
-		return tmpl, fmt.Errorf("Error: A user-defined template discovery has an error: %s\n", err)
+		return tmpl, fmt.Errorf("a user-defined template discovery has an error: %w", err)
 	}
 
 	fileExt := []string{"gohtml", "gotmpl", "tmpl"}
@@ -587,14 +587,14 @@ func parseUserTemplates(tmplPath string) (*ut.Template, error) {
 					ut.Must(matchedTmpls, err)
 					// Catches all errors besides pattern matching.
 				} else if !strings.Contains(err.Error(), "pattern matches no files") {
-					return tmpl, fmt.Errorf("Error: A user-defined template has an error: %s\n"+
-						"       - All templates with the file extension (.%s) will not function until the error is corrected\n", err, p)
+					return tmpl, fmt.Errorf("a user-defined template has an error: %w - "+
+						"all templates with the file extension (.%s) will not function until the error is corrected", err, p)
 				}
 			}
 			// Catches all errors besides pattern matching.
 		} else if !strings.Contains(err.Error(), "pattern matches no files") {
-			return tmpl, fmt.Errorf("Error: A user-defined template has an error: %s\n"+
-				"       - All templates with the file extension (.%s) will not function until the error is corrected\n", err, p)
+			return tmpl, fmt.Errorf("a user-defined template has an error: %w - "+
+				"all templates with the file extension (.%s) will not function until the error is corrected", err, p)
 		}
 	}
 	return tmpl, nil
@@ -614,10 +614,10 @@ func executeUserTemplate(alert Alert, token string, tmpls *ut.Template) (string,
 	err := tmpls.ExecuteTemplate(buf, token, alert)
 	if err != nil {
 		if strings.Contains(err.Error(), "no template") {
-			return "", fmt.Errorf("Notice: Templates found, but no templates found associated with the token (%s)\n"+
-				"                          - If templates are configured, please check the logs for template errors\n", token)
+			return "", fmt.Errorf("notice: templates found, but no templates found associated with the token (%s) - "+
+				"if templates are configured, please check the logs for template errors", token)
 		} else {
-			return "", fmt.Errorf("Error: %s\n", err)
+			return "", err
 		}
 	}
 	return buf.String(), err
@@ -630,7 +630,7 @@ func renderTemplate(templateString string, data interface{}, externalURL *url.UR
 	titleTemplate := pt.NewTemplateExpander(context.Background(), templateString, "tmp", data, 0, nil, externalURL, nil)
 	result, err = titleTemplate.Expand()
 	if err != nil {
-		return "", fmt.Errorf("error in Template: %s", err)
+		return "", fmt.Errorf("error in template: %w", err)
 	}
 	return result, err
 }
@@ -642,7 +642,7 @@ type AlertValues struct {
 }
 
 func (a Alert) Values() []AlertValues {
-	listRegx := regexp.MustCompile("\\[ ?metric='(.*?)' ?labels=\\{(.*?)\\} ?value=(.*?) ?\\]")
+	listRegx := regexp.MustCompile(`\[ ?metric='(.*?)' ?labels=\{(.*?)\} ?value=(.*?) ?\]`)
 	list := listRegx.FindAllStringSubmatch(a.ValueString, -1)
 
 	var alertValues []AlertValues
