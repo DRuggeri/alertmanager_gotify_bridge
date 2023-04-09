@@ -187,10 +187,12 @@ The bridge now supports user-defined templating for all inbound messages. The us
 
 #### Usage Notes:
 - For Docker, you must bind your volume to your host to add user-defined templating.
+  - Example: `../alertmanager_gotify_bridge/templates:/./templates`
+- User-defined templates are loaded during the bridge's startup. Any template changes will always require a restart or update to the service to see the changes reflect.
 - The default directory for all templates is the root of the bridge in the folder called `templates`.
 - User-defined templating allows matching and linking using the "define" name of the template [Go Templating](https://golang.google.cn/pkg/text/template/).
 - The Gotify software token is used for matching a message template.
-- If a template is defined as title=TOKEN, it will be used to render the title of the alert..
+- If a template is defined as title=TOKEN, it will be used to render the title of the alert.
 - All file names must be unique but can be any name or subfolder naming you choose.
 - Only one Gotify software token should be defined. More than one will result in inconsistent alerting results.
 - The bridge supports the following template file extensions: "gohtml", "gotmpl", and "tmpl".
@@ -306,6 +308,8 @@ The following images are available for use:
     environment:
       - GOTIFY_TOKEN=xxxxxxx
       - GOTIFY_ENDPOINT=http://gotify:80/message
+    volumes:
+      - <local path>:/./templates
     ports:
       - 8080:8080
     restart: unless-stopped
@@ -315,6 +319,9 @@ Supported tags:
 - latest (latest tag or master)
 - vX.Y.Z (eg. v0.6.0, specific version)
 - vX.Y (latest maj/minor version)
+
+Optional bind mount:
+- The bind mount is only required when user-defined templates are used.
 
 ## Community Contributions
 * A docker container of this bridge is also maintained by [ndragon798](https://github.com/ndragon798) on [docker hub](https://hub.docker.com/r/nathaneaston/alertmanager_gotify_bridge-docker)
