@@ -314,7 +314,7 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 				var userMsgTmpl string
 
 				// Executes a user title template if one exists
-				userTitleTmpl, err = executeUserTemplate(alert, fmt.Sprintf("title=%s", appToken), tmpls)
+				userTitleTmpl, err = executeUserTemplate(alert, fmt.Sprintf("title=%s", token), tmpls)
 				if err != nil {
 					if *svr.debug {
 						log.Printf("    %s                          - Falling back to default alerting\n", err)
@@ -345,7 +345,7 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 				}
 
 				// Executes a user message template if one exists
-				userMsgTmpl, err = executeUserTemplate(alert, appToken, tmpls)
+				userMsgTmpl, err = executeUserTemplate(alert, token, tmpls)
 				if err != nil {
 					if *svr.debug {
 						log.Printf("    %s                          - Falling back to default alerting\n", err)
