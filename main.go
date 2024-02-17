@@ -79,10 +79,10 @@ var (
 	authPassword     = ""
 	metricsNamespace = kingpin.Flag("metrics_namespace", "Metrics Namespace ($METRICS_NAMESPACE)").Envar("METRICS_NAMESPACE").Default("alertmanager_gotify_bridge").String()
 	metricsPath      = kingpin.Flag("metrics_path", "Path under which to expose metrics for the bridge ($METRICS_PATH)").Envar("METRICS_PATH").Default("/metrics").String()
-	extendedDetails  = kingpin.Flag("extended_details", "When enabled, alerts are presented in HTML format and include colorized status (FIR|RES), alert start time, and a link to the generator of the alert ($EXTENDED_DETAILS)").Default("false").Envar("EXTENDED_DETAILS").Bool()
+	extendedDetails  = kingpin.Flag("extended_details", "When enabled, alerts are presented in Markdown format and include status (FIR|RES), alert start time, and a link to the generator of the alert, if set. This flag implies --markdown ($EXTENDED_DETAILS)").Default("false").Envar("EXTENDED_DETAILS").Bool()
 	dispatchErrors   = kingpin.Flag("dispatch_errors", "When enabled, alerts will be tried to dispatch with a error-message regarding faulty templating or missing fields to help debugging ($DISPATCH_ERRORS)").Default("false").Envar("DISPATCH_ERRORS").Bool()
-	markdown         = kingpin.Flag("markdown", "Renders the templates as Markdown ($MARKDOWN)").Default("false").Envar("MARKDOWN").Bool()
-	clickToGenerator = kingpin.Flag("click_to_generator", "Makes the notification clickable, leading to the generator URL ($CLICK_TO_GENERATOR)").Default("false").Envar("CLICK_TO_GENERATOR").Bool()
+	markdown         = kingpin.Flag("markdown", "Renders the templates as Markdown, this flag is implied when using --extended_details ($MARKDOWN)").Default("false").Envar("MARKDOWN").Bool()
+	clickToGenerator = kingpin.Flag("click_to_generator", "Makes the notification clickable, leading to the generator URL, if it is set ($CLICK_TO_GENERATOR)").Default("false").Envar("CLICK_TO_GENERATOR").Bool()
 
 	debug   = kingpin.Flag("debug", "Enable debug output of the server").Bool()
 	metrics = make(map[string]int)
@@ -294,27 +294,22 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 
-			if *extendedDetails {
-				// set text to html
-				extrasContentType := make(map[string]string)
-				extrasContentType["contentType"] = "text/html"
-				extras["client::display"] = extrasContentType
-
-				switch alert.Status {
-				case "resolved":
-					message += "<font style='color: #00b339;' data-mx-color='#00b339'>RESOLVED</font><br/> "
-					title += "[RES] "
-				case "firing":
-					message += "<font style='color: #b31e00;' data-mx-color='#b31e00'>FIRING</font><br/> "
-					title += "[FIR] "
-				}
-			}
-
-			if *markdown {
+			if *markdown || *extendedDetails {
 				// set text to markdown
 				extrasContentType := make(map[string]string)
 				extrasContentType["contentType"] = "text/markdown"
 				extras["client::display"] = extrasContentType
+			}
+
+			if *extendedDetails {
+				switch alert.Status {
+				case "resolved":
+					message += "**RESOLVED**\n"
+					title += "[RES] "
+				case "firing":
+					message += "**FIRING**\n"
+					title += "[FIR] "
+				}
 			}
 
 			// Checks if user defined templates exist
@@ -476,14 +471,14 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 
 			if *extendedDetails {
 				if strings.HasPrefix(alert.GeneratorURL, "http") {
-					message += "<br/><a href='" + alert.GeneratorURL + "'>go to source</a>"
+					message += "\n\n[Go to source](" + alert.GeneratorURL + ")"
 					extrasNotification := make(map[string]map[string]string)
 					extrasNotification["click"] = make(map[string]string)
 					extrasNotification["click"]["url"] = alert.GeneratorURL
 					extras["client::notification"] = extrasNotification
 				}
 				if alert.StartsAt != "" {
-					message += "<br/><br/><i><font style='color: #999999;' data-mx-color='#999999'> alert created at: " + alert.StartsAt[:19] + "</font></i><br/>"
+					message += "\n\n*Alert created at: " + alert.StartsAt[:19] + "*\n\n"
 				}
 			}
 
@@ -492,7 +487,7 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 				// extendedDetails, mainly this is to work with the markdown formatting
 				// so there is no need to add HTML to the notification, and not disturb
 				// the existing flags.
-				if strings.HasPrefix(alert.GeneratorURL, "http") {
+				if alert.GeneratorURL != "" && strings.HasPrefix(alert.GeneratorURL, "http") {
 					extrasNotification := make(map[string]map[string]string)
 					extrasNotification["click"] = make(map[string]string)
 					extrasNotification["click"]["url"] = alert.GeneratorURL
