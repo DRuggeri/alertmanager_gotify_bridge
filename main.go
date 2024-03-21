@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"math"
@@ -533,7 +534,7 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 					continue
 				} else {
 					defer resp.Body.Close()
-					body, _ := ioutil.ReadAll(resp.Body)
+					body, _ := io.ReadAll(resp.Body)
 					if *svr.debug {
 						log.Printf("    Dispatched! Response was %s\n", body)
 					}
