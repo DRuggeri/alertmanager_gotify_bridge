@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"math"
 	"net/http"
@@ -240,7 +239,7 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 	}
 
 	/* Assume this will never fail */
-	b, _ := ioutil.ReadAll(r.Body)
+	b, _ := io.ReadAll(r.Body)
 
 	if *svr.debug {
 		log.Printf("bridge: Recieved request: %+v\n", r)
@@ -615,6 +614,11 @@ func parseUserTemplates(tmplPath string) (*ut.Template, error) {
 				"all templates with the file extension (.%s) will not function until the error is corrected", err, p)
 		}
 	}
+
+	if tmpl != nil {
+		tmpl.Funcs(fxns)
+	}
+
 	return tmpl, nil
 }
 

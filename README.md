@@ -124,27 +124,9 @@ All providers are back up
 Now if the alert fires it would list the jobs that are down. Which information the `.Values` method contains can be inspected in the Grafana alertmanager when configuring an alert and clicking the `Preview Alert` button.
 
 ### Template Functions
-The bridges Go templating supports several template functions. All template functions listed in the [Grafana template functions](https://grafana.com/docs/grafana/latest/alerting/fundamentals/annotation-label/template-functions/) are supported with the bridge, with usage examples.
+The bridge uses a subset of Prometheus's [template functions](https://prometheus.io/docs/prometheus/latest/configuration/template_reference/). Some of the template functions are not supported in the bridge. The file [prometheus_template_functions.go](prometheus_template_functions.go) contains the list of functions and how they are implemented in the bridge.
 
-NOTE: The externalURL function will only return a result when the message is sent from Grafana. Messages initiated through alertmanager will not contain an externalURL.
-
-The bridge uses Prometheous's [template functions](https://prometheus.io/docs/prometheus/latest/configuration/template_reference/). Some of the template functions in [template.go](https://github.com/prometheus/prometheus/blob/main/template/template.go) are not supported in the bridge because of limitations. The chart below lists the additional functions not found in the [Grafana template functions](https://grafana.com/docs/grafana/latest/alerting/fundamentals/annotation-label/template-functions/) documentation, but can be called through the bridge.
-
-| Function Name   | Supported |
-| --------------- |:---------:|
-| query           | no        |
-| first           | no        |
-| label           | no        |
-| value           | no        |
-| strvalue        | no        |
-| safeHtml        | yes       |
-| sortByLabel     | no        |
-| stripPort       | yes       |
-| stripDomain     | yes       |
-| toTime          | yes       |
-| parseDuration   | yes       |
-
-Grafana Example:
+Example:
 ```go
 {{ reReplaceAll ".+\\|" " " .Labels.log }}
 ```
@@ -183,7 +165,7 @@ curl http://127.0.0.1:8080/gotify_webhook -d '
 '
 ```
 ### Bridge Message Templating
-The bridge now supports user-defined templating for all inbound messages. The user-defined templating can be used for the title and/or message. Also, user-defined templating overrides the default title and message annotations. All keys and values in the JSON from alertmanager can be used in the user-defined template. Any failures in the templates will result in the bridge defaulting back to default alerting.
+The bridge supports user-defined templating for all inbound messages. The user-defined templating can be used for the title and/or message. Also, user-defined templating overrides the default title and message annotations. All keys and values in the JSON from alertmanager can be used in the user-defined template. Any failures in the templates will result in the bridge falling back to default alerting.
 
 #### Usage Notes:
 - For Docker, you must bind your volume to your host to add user-defined templating.
