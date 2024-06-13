@@ -280,7 +280,7 @@ An official scratch-based Docker image is built with every tag and pushed to Doc
 
 The following images are available for use:
 - [druggeri/alertmanager_gotify_bridge](https://hub.docker.com/r/druggeri/alertmanager_gotify_bridge)
-- [ghcr.io/DRuggeri/alertmanager_gotify_bridge](https://ghcr.io/DRuggeri/alertmanager_gotify_bridge)
+- [ghcr.io/druggeri/alertmanager_gotify_bridge](https://ghcr.io/druggeri/alertmanager_gotify_bridge)
 
 ### Docker-Compose
 ```
