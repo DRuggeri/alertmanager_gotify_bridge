@@ -29,4 +29,5 @@ builds:
   mod_timestamp: '{{ .CommitTimestamp }}'
 release:
   draft: false
+version: 2
 
