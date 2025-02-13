@@ -16,11 +16,11 @@ import (
 	ut "text/template"
 	"time"
 
+	"github.com/alecthomas/kingpin/v2"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors/version"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/prometheus/common/version"
 	pt "github.com/prometheus/prometheus/template"
-	"gopkg.in/alecthomas/kingpin.v2"
 )
 
 var Version = "testing"
