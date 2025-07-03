@@ -93,7 +93,7 @@ receivers:
 The supports [Go templating](https://golang.org/pkg/text/template/) with [Prometheus-enhanced functions](https://prometheus.io/docs/prometheus/latest/configuration/template_reference/), so you can customize the alert messages further with templates in the title and message annotations.
 
 For example add following line to the title:  
-`{{if eq .Status "firing"}}🔥{{else}}✅{{end}}`  
+`{{if eq .Status "firing"}}❌{{else}}✅{{end}}`  
 This differentiates firing from resolving alerts.  
   
 Also, there are two methods you can use for additional customisation:
