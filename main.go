@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	ut "text/template"
 	"time"
 
@@ -83,7 +84,28 @@ var (
 
 	debug   = kingpin.Flag("debug", "Enable debug output of the server").Bool()
 	metrics = make(map[string]int)
+	// metricsMu guards metrics: net/http serves each request on its own
+	// goroutine, and unsynchronized map writes are a fatal runtime error.
+	metricsMu sync.Mutex
 )
+
+// incMetric increments a counter in metrics; safe for concurrent use.
+func incMetric(key string) {
+	metricsMu.Lock()
+	defer metricsMu.Unlock()
+	metrics[key]++
+}
+
+// metricsSnapshot returns a copy of metrics; safe for concurrent use.
+func metricsSnapshot() map[string]int {
+	metricsMu.Lock()
+	defer metricsMu.Unlock()
+	snapshot := make(map[string]int, len(metrics))
+	for key, value := range metrics {
+		snapshot[key] = value
+	}
+	return snapshot
+}
 
 func init() {
 	prometheus.MustRegister(version.NewCollector(*metricsNamespace))
@@ -111,7 +133,8 @@ func (h *basicAuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *metricsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	collector := NewMetricsCollector(&metrics, h.svr, metricsNamespace)
+	snapshot := metricsSnapshot()
+	collector := NewMetricsCollector(&snapshot, h.svr, metricsNamespace)
 	registry := prometheus.NewRegistry()
 	registry.MustRegister(collector)
 
@@ -220,7 +243,7 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 	text := []string{}
 	respCode := http.StatusOK
 
-	metrics["requests_received"]++
+	incMetric("requests_received")
 
 	appToken := r.URL.Query().Get("token")
 	if appToken != "" {
@@ -263,7 +286,7 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 			log.Printf("bridge: Unmarshal of request failed: %s\n", err)
 			log.Printf("\nBEGIN passed data:\n%s\nEND passed data.", string(b))
 			http.Error(w, fmt.Sprintf("%s", err), http.StatusBadRequest)
-			metrics["requests_invalid"]++
+			incMetric("requests_invalid")
 			return
 		}
 
@@ -279,7 +302,7 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 			priority := *svr.defaultPriority
 			tmpls := svr.userTemplates
 
-			metrics["alerts_received"]++
+			incMetric("alerts_received")
 			if *svr.debug {
 				log.Printf("    Alert %d", idx)
 			}
@@ -515,7 +538,7 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 				if err != nil {
 					log.Printf("    Error setting up request: %s", err)
 					http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-					metrics["alerts_failed"]++
+					incMetric("alerts_failed")
 					return
 				}
 				request.Header.Set("Content-Type", "application/json")
@@ -526,7 +549,7 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 					log.Printf("    Error dispatching to Gotify: %s", err)
 					respCode = http.StatusInternalServerError
 					text = append(text, err.Error())
-					metrics["alerts_failed"]++
+					incMetric("alerts_failed")
 					continue
 				} else {
 					defer resp.Body.Close()
@@ -539,10 +562,10 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 							*svr.gotifyEndpoint, resp.StatusCode, resp.Status)
 						respCode = resp.StatusCode
 						text = append(text, fmt.Sprintf("Gotify Error: %s", resp.Status))
-						metrics["alerts_failed"]++
+						incMetric("alerts_failed")
 					} else {
 						text = append(text, fmt.Sprintf("Message %d dispatched", idx))
-						metrics["alerts_processed"]++
+						incMetric("alerts_processed")
 					}
 					continue
 				}
@@ -551,7 +574,7 @@ func (svr *bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 					log.Printf("    Unable to dispatch!\n")
 					respCode = http.StatusBadRequest
 					text = []string{"Incomplete request"}
-					metrics["alerts_invalid"]++
+					incMetric("alerts_invalid")
 				}
 			}
 		}
